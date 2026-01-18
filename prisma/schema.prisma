@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS
+// ============================================
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  passwordHash    String?   @map("password_hash")
+
+  // Profile
+  fullName    String  @map("full_name")
+  displayName String? @map("display_name")
+  avatarUrl   String? @map("avatar_url")
+  bio         String?
+
+  // Location
+  neighborhoodId  String?       @map("neighborhood_id")
+  neighborhood    Neighborhood? @relation(fields: [neighborhoodId], references: [id])
+  addressVerified Boolean       @default(false) @map("address_verified")
+
+  // Permissions
+  role        String  @default("user")
+  isBanned    Boolean @default(false) @map("is_banned")
+  bannedAt    DateTime? @map("banned_at")
+  bannedReason String?  @map("banned_reason")
+
+  // Engagement
+  lastActiveAt DateTime? @map("last_active_at")
+
+  // Settings (stored as JSON)
+  notificationPreferences Json @default("{\"email_comments\": true, \"email_alerts\": true, \"email_digest\": \"daily\", \"push_enabled\": true}") @map("notification_preferences")
+  language                String @default("ro")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  posts         Post[]
+  comments      Comment[]
+  reports       Report[]       @relation("Reporter")
+  handledReports Report[]      @relation("Handler")
+  notifications Notification[]
+
+  @@index([email])
+  @@index([neighborhoodId])
+  @@map("users")
+}
+
+// ============================================
+// NEIGHBORHOODS
+// ============================================
+model Neighborhood {
+  id          String  @id @default(uuid())
+  name        String
+  city        String
+  slug        String  @unique
+  description String?
+
+  // Stats
+  memberCount Int @default(0) @map("member_count")
+
+  // Status
+  isActive Boolean @default(false) @map("is_active")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  users User[]
+  posts Post[]
+
+  @@index([city])
+  @@index([slug])
+  @@map("neighborhoods")
+}
+
+// ============================================
+// POSTS
+// ============================================
+model Post {
+  id             String       @id @default(uuid())
+  neighborhoodId String       @map("neighborhood_id")
+  neighborhood   Neighborhood @relation(fields: [neighborhoodId], references: [id])
+  authorId       String       @map("author_id")
+  author         User         @relation(fields: [authorId], references: [id])
+
+  // Content
+  title    String?
+  body     String
+  category String
+
+  // Marketplace
+  priceCents Int?    @map("price_cents")
+  currency   String  @default("RON")
+  isFree     Boolean @default(false) @map("is_free")
+
+  // Status
+  status      String    @default("active")
+  isPinned    Boolean   @default(false) @map("is_pinned")
+  pinnedUntil DateTime? @map("pinned_until")
+
+  // Engagement
+  commentCount Int @default(0) @map("comment_count")
+  viewCount    Int @default(0) @map("view_count")
+
+  // Timestamps
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  expiresAt DateTime? @map("expires_at")
+
+  // Relations
+  images   PostImage[]
+  comments Comment[]
+
+  @@index([neighborhoodId, createdAt(sort: Desc)])
+  @@index([neighborhoodId, category, createdAt(sort: Desc)])
+  @@index([authorId, createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+// ============================================
+// POST IMAGES
+// ============================================
+model PostImage {
+  id           String @id @default(uuid())
+  postId       String @map("post_id")
+  post         Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  url          String
+  thumbnailUrl String? @map("thumbnail_url")
+  width        Int?
+  height       Int?
+  sizeBytes    Int?    @map("size_bytes")
+  position     Int     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([postId])
+  @@map("post_images")
+}
+
+// ============================================
+// COMMENTS
+// ============================================
+model Comment {
+  id       String  @id @default(uuid())
+  postId   String  @map("post_id")
+  post     Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId String  @map("author_id")
+  author   User    @relation(fields: [authorId], references: [id])
+  parentId String? @map("parent_id")
+  parent   Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  body   String
+  status String @default("active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([postId, createdAt])
+  @@index([parentId])
+  @@map("comments")
+}
+
+// ============================================
+// REPORTS
+// ============================================
+model Report {
+  id         String @id @default(uuid())
+  reporterId String @map("reporter_id")
+  reporter   User   @relation("Reporter", fields: [reporterId], references: [id])
+
+  targetType String @map("target_type")
+  targetId   String @map("target_id")
+
+  reason  String
+  details String?
+
+  status      String    @default("pending")
+  reviewedBy  String?   @map("reviewed_by")
+  reviewer    User?     @relation("Handler", fields: [reviewedBy], references: [id])
+  reviewedAt  DateTime? @map("reviewed_at")
+  actionTaken String?   @map("action_taken")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@map("reports")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+model Notification {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type  String
+  title String
+  body  String?
+  data  Json?
+
+  isRead Boolean   @default(false) @map("is_read")
+  readAt DateTime? @map("read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, isRead])
+  @@map("notifications")
+}

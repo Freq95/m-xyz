@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(npm install:*)",
+      "Bash(dir:*)",
+      "Bash(npm --version:*)",
+      "Bash(node --version:*)",
+      "Bash(cmd.exe /c \"cd /d d:\\\\m-vecinu && npm install\")",
+      "Bash(cmd.exe /c \"cd /d d:\\\\m-vecinu && npm install && echo DONE\")",
+      "Bash(npm run --help:*)",
+      "Bash(npm i:*)",
+      "Bash(test:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(powershell -Command \"Start-Process cmd -ArgumentList ''/c d:\\\\m-vecinu\\\\install.bat'' -Wait -NoNewWindow\")",
+      "Bash(powershell -Command \"Start-Process cmd -ArgumentList ''/c cd /d d:\\\\m-vecinu && npm install 2>&1'' -Wait -NoNewWindow\")",
+      "Bash(powershell -Command \"Start-Process cmd -ArgumentList ''/c cd /d d:\\\\m-vecinu && npx prisma generate 2>&1'' -Wait -NoNewWindow\")",
+      "Bash(powershell -Command \"Start-Process cmd -ArgumentList ''/c cd /d d:\\\\m-vecinu && npm run build 2>&1'' -Wait -NoNewWindow\")"
+    ]
+  }
+}
