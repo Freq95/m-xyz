@@ -1,25 +1,41 @@
 import { NextRequest } from 'next/server';
-import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma/client';
 import { loginSchema } from '@/lib/validations/auth';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
-import { AuthenticationError } from '@/lib/errors';
+import { AuthenticationError, AuthorizationError, RateLimitError } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
+import { authRateLimit, getClientIp } from '@/lib/rate-limit';
+import { validateOrigin } from '@/lib/csrf';
 
 export async function POST(request: NextRequest) {
   try {
+    // CSRF protection - validate request origin
+    if (!validateOrigin(request)) {
+      throw new AuthorizationError('Cerere invalidă');
+    }
+
+    // Apply rate limiting
+    if (authRateLimit) {
+      const ip = getClientIp(request);
+      const { success } = await authRateLimit.limit(ip);
+      if (!success) {
+        throw new RateLimitError('Prea multe încercări de autentificare. Încearcă din nou peste 15 minute.');
+      }
+    }
+
     const body = await request.json();
 
     // Validate input
     const { email, password } = loginSchema.parse(body);
 
-    // Find user
+    const normalizedEmail = email.toLowerCase();
+
+    // Find user in our database
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: normalizedEmail },
       select: {
         id: true,
         email: true,
-        passwordHash: true,
         fullName: true,
         isBanned: true,
         bannedReason: true,
@@ -29,7 +45,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!user || !user.passwordHash) {
+    if (!user) {
       throw new AuthenticationError('Email sau parolă incorectă');
     }
 
@@ -42,30 +58,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-    if (!isValidPassword) {
+    // Authenticate with Supabase Auth (creates session)
+    const supabase = await createClient();
+    const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+    if (signInError || !authData.user) {
       throw new AuthenticationError('Email sau parolă incorectă');
     }
 
-    // Update last active
+    // Update last active timestamp
     await prisma.user.update({
       where: { id: user.id },
       data: { lastActiveAt: new Date() },
     });
-
-    // Create Supabase session
-    const supabase = await createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.toLowerCase(),
-      password,
-    });
-
-    // If Supabase auth fails (user might not exist there), we still allow login
-    // since we have our own password validation
-    if (signInError) {
-      console.warn('Supabase auth warning:', signInError.message);
-    }
 
     // Return user data (without sensitive fields)
     return successResponse({

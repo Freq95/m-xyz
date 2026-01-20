@@ -4,14 +4,33 @@ import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Input, Skeleton } from '@/components/ui';
+import { fetchWithTimeout } from '@/lib/fetch';
+
+// Allowed redirect paths (must match middleware configuration)
+const allowedRedirectPaths = ['/feed', '/post', '/profile', '/settings', '/notifications', '/onboarding'];
+
+/**
+ * Validates that a redirect path is safe (internal, relative path only)
+ * Prevents open redirect vulnerabilities
+ */
+function isValidRedirectPath(path: string): boolean {
+  if (!path.startsWith('/')) return false;
+  if (path.includes('://') || path.startsWith('//')) return false;
+  return allowedRedirectPaths.some((allowed) => path === allowed || path.startsWith(allowed + '/'));
+}
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get('redirect') || '/feed';
+  const redirectParam = searchParams.get('redirect');
+  // Validate redirect parameter - fallback to /feed if invalid
+  const redirect = redirectParam && isValidRedirectPath(redirectParam) ? redirectParam : '/feed';
+  const sessionError = searchParams.get('error');
 
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(
+    sessionError === 'session_error' ? 'Sesiunea a expirat. Te rugăm să te autentifici din nou.' : ''
+  );
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -23,10 +42,11 @@ function LoginForm() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetchWithTimeout('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
+        timeout: 30000,
       });
 
       const data = await res.json();

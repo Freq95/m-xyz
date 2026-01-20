@@ -72,8 +72,8 @@ export class ConflictError extends ApiError {
 export class RateLimitError extends ApiError {
   public retryAfter?: number;
 
-  constructor(retryAfter?: number) {
-    super(429, 'Prea multe cereri. Încearcă din nou mai târziu.', 'RATE_LIMIT');
+  constructor(message = 'Prea multe cereri. Încearcă din nou mai târziu.', retryAfter?: number) {
+    super(429, message, 'RATE_LIMIT');
     this.retryAfter = retryAfter;
     this.name = 'RateLimitError';
   }

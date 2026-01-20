@@ -2,6 +2,9 @@
   "name": "vecinu",
   "version": "0.1.0",
   "private": true,
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +13,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "next": "14.2.35",
@@ -19,13 +23,19 @@
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.45.0",
     "@supabase/ssr": "^0.5.0",
+    "@upstash/redis": "^1.34.3",
+    "@upstash/ratelimit": "^2.0.3",
     "zod": "^3.23.8",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.0",
     "lucide-react": "^0.460.0",
     "date-fns": "^4.1.0",
-    "class-variance-authority": "^0.7.0"
+    "class-variance-authority": "^0.7.0",
+    "isomorphic-dompurify": "^2.16.0"
+  },
+  "optionalDependencies": {
+    "resend": "^4.0.0"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
@@ -38,6 +48,8 @@
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.35",
-    "prisma": "^5.22.0"
+    "prisma": "^5.22.0",
+    "dotenv-cli": "^7.4.2",
+    "ts-node": "^10.9.2"
   }
 }

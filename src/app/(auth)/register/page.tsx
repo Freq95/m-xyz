@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button, Input } from '@/components/ui';
+import { fetchWithTimeout } from '@/lib/fetch';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,10 +33,11 @@ export default function RegisterPage() {
     }
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetchWithTimeout('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
+        timeout: 30000,
       });
 
       const data = await res.json();
@@ -51,8 +53,10 @@ export default function RegisterPage() {
         throw new Error(data.error || 'A apărut o eroare');
       }
 
-      // Redirect to verification page or feed
-      router.push('/verify-email?email=' + encodeURIComponent(formData.email));
+      // Redirect to verification page without exposing email in URL
+      // Store email in sessionStorage for the verify-email page to display
+      sessionStorage.setItem('pendingVerificationEmail', formData.email);
+      router.push('/verify-email');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'A apărut o eroare');
     } finally {

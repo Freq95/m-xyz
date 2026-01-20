@@ -1,14 +1,55 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Mail } from 'lucide-react';
+import { Mail, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button, Skeleton } from '@/components/ui';
 
 function VerifyEmailContent() {
-  const searchParams = useSearchParams();
-  const email = searchParams.get('email');
+  const [email, setEmail] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Get email from sessionStorage (set during registration)
+    const storedEmail = sessionStorage.getItem('pendingVerificationEmail');
+    if (storedEmail) {
+      setEmail(storedEmail);
+      // Keep it for potential resend - don't clear it
+    }
+  }, []);
+
+  const handleResend = async () => {
+    if (!email || isResending) return;
+
+    setIsResending(true);
+    setResendStatus('idle');
+    setResendMessage(null);
+
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setResendStatus('success');
+        setResendMessage('Email trimis! Verifică inbox-ul și folderul Spam.');
+      } else {
+        setResendStatus('error');
+        setResendMessage(result.error || 'Nu am putut retrimite emailul.');
+      }
+    } catch {
+      setResendStatus('error');
+      setResendMessage('Eroare de conexiune. Încearcă din nou.');
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   return (
     <div className="text-center">
@@ -27,12 +68,33 @@ function VerifyEmailContent() {
         . Click pe link pentru a-ți activa contul.
       </p>
 
+      {/* Resend Status Messages */}
+      {resendStatus === 'success' && (
+        <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-green-500/10 text-green-600 text-sm">
+          <CheckCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{resendMessage}</span>
+        </div>
+      )}
+
+      {resendStatus === 'error' && (
+        <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 text-destructive text-sm">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{resendMessage}</span>
+        </div>
+      )}
+
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">
           Nu ai primit emailul? Verifică folderul Spam sau
         </p>
-        <Button variant="outline" className="w-full">
-          Retrimite emailul
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={handleResend}
+          disabled={!email || isResending}
+          isLoading={isResending}
+        >
+          {isResending ? 'Se trimite...' : 'Retrimite emailul'}
         </Button>
       </div>
 
