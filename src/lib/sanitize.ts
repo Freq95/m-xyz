@@ -4,7 +4,9 @@
 let DOMPurify: any = null;
 
 try {
-  DOMPurify = require('isomorphic-dompurify');
+  const dompurifyModule = require('isomorphic-dompurify');
+  // Handle both default export and named export
+  DOMPurify = dompurifyModule.default || dompurifyModule;
 } catch {
   console.warn('⚠️  isomorphic-dompurify not installed. Using basic sanitization fallback.');
 }
@@ -32,11 +34,15 @@ function basicStripTags(input: string): string {
 export function sanitizeText(input: string): string {
   if (!input) return '';
 
-  if (DOMPurify) {
-    return DOMPurify.sanitize(input, {
-      ALLOWED_TAGS: [], // No HTML allowed
-      ALLOWED_ATTR: [], // No attributes allowed
-    }).trim();
+  try {
+    if (DOMPurify && typeof DOMPurify.sanitize === 'function') {
+      return DOMPurify.sanitize(input, {
+        ALLOWED_TAGS: [], // No HTML allowed
+        ALLOWED_ATTR: [], // No attributes allowed
+      }).trim();
+    }
+  } catch (err) {
+    console.error('DOMPurify error, using fallback:', err);
   }
 
   // Fallback: basic tag stripping
@@ -50,16 +56,19 @@ export function sanitizeText(input: string): string {
 export function sanitizeHtml(input: string): string {
   if (!input) return '';
 
-  if (DOMPurify) {
-    return DOMPurify.sanitize(input, {
-      ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'a', 'ul', 'ol', 'li'],
-      ALLOWED_ATTR: ['href', 'target', 'rel'],
-      ADD_ATTR: ['target'],
-      FORBID_ATTR: ['style', 'onclick', 'onerror'],
-    }).trim();
+  try {
+    if (DOMPurify && typeof DOMPurify.sanitize === 'function') {
+      return DOMPurify.sanitize(input, {
+        ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'a', 'ul', 'ol', 'li'],
+        ALLOWED_ATTR: ['href', 'target', 'rel'],
+        ADD_ATTR: ['target'],
+        FORBID_ATTR: ['style', 'onclick', 'onerror'],
+      }).trim();
+    }
+  } catch (err) {
+    console.error('DOMPurify error, using fallback:', err);
   }
 
   // Fallback: strip all tags (less permissive but safer without proper sanitizer)
-  console.warn('sanitizeHtml called without DOMPurify - stripping all tags for safety');
   return basicStripTags(input);
 }

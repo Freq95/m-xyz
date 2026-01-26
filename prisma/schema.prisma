@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
 }
 
 // ============================================
@@ -50,6 +50,8 @@ model User {
   reports       Report[]       @relation("Reporter")
   handledReports Report[]      @relation("Handler")
   notifications Notification[]
+  savedPosts    SavedPost[]
+  auditLogs     AuditLog[]
 
   @@index([email])
   @@index([neighborhoodId])
@@ -119,8 +121,9 @@ model Post {
   expiresAt DateTime? @map("expires_at")
 
   // Relations
-  images   PostImage[]
-  comments Comment[]
+  images     PostImage[]
+  comments   Comment[]
+  savedBy    SavedPost[]
 
   @@index([neighborhoodId, createdAt(sort: Desc)])
   @@index([neighborhoodId, category, createdAt(sort: Desc)])
@@ -220,4 +223,42 @@ model Notification {
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+// ============================================
+// SAVED POSTS (Bookmarks)
+// ============================================
+model SavedPost {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId String @map("post_id")
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("saved_posts")
+}
+
+// ============================================
+// ADMIN AUDIT LOG
+// ============================================
+model AuditLog {
+  id      String @id @default(uuid())
+  adminId String @map("admin_id")
+  admin   User   @relation(fields: [adminId], references: [id])
+
+  action     String // hide_post, hide_comment, ban_user, unban_user, dismiss_report
+  targetType String @map("target_type") // post, comment, user, report
+  targetId   String @map("target_id")
+  reason     String?
+  metadata   Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([adminId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
 }

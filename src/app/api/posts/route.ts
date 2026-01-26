@@ -9,9 +9,10 @@ import {
   NotFoundError,
 } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
-import { postRateLimit, getClientIp } from '@/lib/rate-limit';
+import { postRateLimit } from '@/lib/rate-limit';
 import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
+import { redis, CACHE_KEYS, CACHE_TTL, invalidateFeedCache } from '@/lib/redis/client';
 
 /**
  * GET /api/posts - Get posts feed for a neighborhood
@@ -28,6 +29,23 @@ export async function GET(request: NextRequest) {
       limit: searchParams.get('limit') || 20,
     });
 
+    // Only cache first page (no cursor)
+    const shouldCache = redis && !query.cursor;
+    const cacheKey = shouldCache
+      ? CACHE_KEYS.FEED({
+          neighborhoodSlug: query.neighborhood,
+          categorySlug: query.category,
+        })
+      : null;
+
+    // Try to get from cache
+    if (shouldCache && cacheKey && redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return successResponse(cached);
+      }
+    }
+
     // Find neighborhood by slug
     const neighborhood = await prisma.neighborhood.findUnique({
       where: { slug: query.neighborhood },
@@ -38,9 +56,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Build cursor condition for pagination
-    const cursorCondition = query.cursor
-      ? { createdAt: { lt: (await prisma.post.findUnique({ where: { id: query.cursor } }))?.createdAt } }
-      : {};
+    let cursorCondition = {};
+    if (query.cursor) {
+      const cursorPost = await prisma.post.findUnique({
+        where: { id: query.cursor },
+        select: { createdAt: true }
+      });
+      if (cursorPost?.createdAt) {
+        cursorCondition = { createdAt: { lt: cursorPost.createdAt } };
+      }
+    }
 
     // Fetch posts
     const posts = await prisma.post.findMany({
@@ -79,32 +104,38 @@ export async function GET(request: NextRequest) {
     const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
     const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1]?.id : undefined;
 
-    return successResponse(
-      postsToReturn.map((post) => ({
-        id: post.id,
-        title: post.title,
-        body: post.body,
-        category: post.category,
-        priceCents: post.priceCents,
-        currency: post.currency,
-        isFree: post.isFree,
-        isPinned: post.isPinned,
-        commentCount: post._count.comments,
-        viewCount: post.viewCount,
-        createdAt: post.createdAt,
-        author: {
-          id: post.author.id,
-          name: post.author.displayName || post.author.fullName,
-          avatarUrl: post.author.avatarUrl,
-        },
-        images: post.images.map((img) => ({
-          id: img.id,
-          url: img.url,
-          thumbnailUrl: img.thumbnailUrl,
-        })),
+    // Format response data
+    const responseData = postsToReturn.map((post) => ({
+      id: post.id,
+      title: post.title,
+      body: post.body,
+      category: post.category,
+      priceCents: post.priceCents,
+      currency: post.currency,
+      isFree: post.isFree,
+      isPinned: post.isPinned,
+      status: post.status,
+      commentCount: post._count.comments,
+      viewCount: post.viewCount,
+      createdAt: post.createdAt,
+      author: {
+        id: post.author.id,
+        name: post.author.displayName || post.author.fullName,
+        avatarUrl: post.author.avatarUrl,
+      },
+      images: post.images.map((img) => ({
+        id: img.id,
+        url: img.url,
+        thumbnailUrl: img.thumbnailUrl,
       })),
-      { cursor: nextCursor, hasMore }
-    );
+    }));
+
+    // Store in cache
+    if (shouldCache && cacheKey && redis) {
+      await redis.set(cacheKey, responseData, { ex: CACHE_TTL.FEED });
+    }
+
+    return successResponse(responseData, { cursor: nextCursor, hasMore });
   } catch (error) {
     return handleApiError(error);
   }
@@ -202,6 +233,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Invalidate feed cache since new post was created
+    await invalidateFeedCache();
+
     return successResponse({
       id: post.id,
       title: post.title,
@@ -218,6 +252,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    console.error('POST /api/posts error:', error);
     return handleApiError(error);
   }
 }

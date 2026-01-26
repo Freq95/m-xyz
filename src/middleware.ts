@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 // Routes that require authentication
-const protectedRoutes = ['/feed', '/post', '/profile', '/settings', '/notifications'];
+const protectedRoutes = ['/feed', '/post', '/profile', '/settings', '/notifications', '/admin'];
 
 // Allowed redirect paths (must be internal routes)
-const allowedRedirectPaths = ['/feed', '/post', '/profile', '/settings', '/notifications', '/onboarding'];
+const allowedRedirectPaths = ['/feed', '/post', '/profile', '/settings', '/notifications', '/onboarding', '/admin'];
 
 /**
  * Validates that a redirect path is safe (internal, relative path only)

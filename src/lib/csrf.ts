@@ -12,15 +12,42 @@ export function validateOrigin(request: NextRequest): boolean {
   const referer = request.headers.get('referer');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-  // In development, allow requests without origin (e.g., from API clients)
+  // In development, be more lenient with localhost variants
   if (process.env.NODE_ENV === 'development') {
-    return true;
+    // Allow localhost variants (localhost, 127.0.0.1, etc.)
+    if (origin) {
+      try {
+        const originUrl = new URL(origin);
+        if (originUrl.hostname === 'localhost' || originUrl.hostname === '127.0.0.1') {
+          return true;
+        }
+      } catch {
+        // Invalid origin URL, continue with other checks
+      }
+    }
+
+    // Allow requests without origin (same-origin or API tools)
+    if (!origin && !referer) {
+      return true;
+    }
+
+    // Check referer for localhost
+    if (referer) {
+      try {
+        const refererUrl = new URL(referer);
+        if (refererUrl.hostname === 'localhost' || refererUrl.hostname === '127.0.0.1') {
+          return true;
+        }
+      } catch {
+        // Invalid referer URL
+      }
+    }
   }
 
   // If no app URL configured, skip validation (but log warning)
   if (!appUrl) {
     console.warn('CSRF: NEXT_PUBLIC_APP_URL not configured');
-    return true;
+    return process.env.NODE_ENV === 'development';
   }
 
   const allowedOrigin = new URL(appUrl).origin;
@@ -40,8 +67,6 @@ export function validateOrigin(request: NextRequest): boolean {
     }
   }
 
-  // No origin or referer - could be a direct API call
-  // In production, we should be strict
   return false;
 }
 

@@ -51,7 +51,11 @@
       "Bash(then cp cursor.md docs/archive/sessions/cursor-phase1.md)",
       "Bash(else echo \"cursor.md not found\")",
       "Bash(fi)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(D:)",
+      "Bash(npm --prefix \"d:/m-vecinu-xyz\" run build)"
     ]
   }
 }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import { ErrorBoundary, ToastProvider } from '@/components/shared';
 import './globals.css';
 
 const inter = Inter({
@@ -55,7 +56,11 @@ export default function RootLayout({
   return (
     <html lang="ro" className={`${inter.variable} dark`} suppressHydrationWarning>
       <body className="min-h-screen font-sans">
-        {children}
+        <ErrorBoundary>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );
