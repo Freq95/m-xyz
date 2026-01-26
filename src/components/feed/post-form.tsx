@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, Textarea } from '@/components/ui';
-import { createPostSchema, type PostCategory } from '@/lib/validations/post';
-import { AlertTriangle, ShoppingBag, HelpCircle, Calendar, Search, Tag } from 'lucide-react';
+import { createPostSchema, type PostCategory, IMAGE_VALIDATION } from '@/lib/validations/post';
+import { AlertTriangle, ShoppingBag, HelpCircle, Calendar, Search, Tag, Image as ImageIcon, X } from 'lucide-react';
 
 const categories: { value: PostCategory; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'ALERT', label: 'Alertă', icon: <AlertTriangle className="w-4 h-4" />, color: 'bg-destructive/10 text-destructive border-destructive/20' },
@@ -22,6 +22,7 @@ interface PostFormProps {
 
 export function PostForm({ onSuccess }: PostFormProps) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -31,8 +32,45 @@ export function PostForm({ onSuccess }: PostFormProps) {
   const [body, setBody] = useState('');
   const [price, setPrice] = useState('');
   const [isFree, setIsFree] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const isMarketplace = category === 'SELL' || category === 'BUY' || category === 'SERVICE';
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size
+    if (file.size > IMAGE_VALIDATION.MAX_SIZE) {
+      setErrors({ image: `Imaginea este prea mare. Mărimea maximă este ${IMAGE_VALIDATION.MAX_SIZE / (1024 * 1024)}MB` });
+      return;
+    }
+
+    // Validate file type
+    if (!IMAGE_VALIDATION.ALLOWED_TYPES.includes(file.type as any)) {
+      setErrors({ image: 'Format invalid. Folosește JPG, PNG sau WebP' });
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    setSelectedImage(file);
+    setErrors({ ...errors, image: '' });
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,11 +104,33 @@ export function PostForm({ onSuccess }: PostFormProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(validationResult.data),
-      });
+      // Use FormData if image is selected, otherwise JSON
+      let response;
+
+      if (selectedImage) {
+        const formData = new FormData();
+        formData.append('title', validationResult.data.title || '');
+        formData.append('body', validationResult.data.body);
+        formData.append('category', validationResult.data.category);
+        if (validationResult.data.priceCents) {
+          formData.append('priceCents', validationResult.data.priceCents.toString());
+        }
+        if (validationResult.data.isFree !== undefined) {
+          formData.append('isFree', validationResult.data.isFree.toString());
+        }
+        formData.append('image', selectedImage);
+
+        response = await fetch('/api/posts', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        response = await fetch('/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validationResult.data),
+        });
+      }
 
       const result = await response.json();
 
@@ -165,6 +225,59 @@ export function PostForm({ onSuccess }: PostFormProps) {
         <p className="mt-1 text-xs text-muted-foreground text-right">
           {body.length}/5000
         </p>
+      </div>
+
+      {/* Image Upload */}
+      <div>
+        <label className="block text-sm font-medium mb-2">
+          Fotografie <span className="text-muted-foreground">(opțional, max 1)</span>
+        </label>
+
+        {imagePreview ? (
+          <div className="relative inline-block">
+            <img
+              src={imagePreview}
+              alt="Preview"
+              className="w-full max-w-sm h-48 object-cover rounded-lg border border-border"
+            />
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              aria-label="Șterge imaginea"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {(selectedImage!.size / 1024).toFixed(1)} KB
+            </p>
+          </div>
+        ) : (
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={IMAGE_VALIDATION.ALLOWED_TYPES.join(',')}
+              onChange={handleImageSelect}
+              className="hidden"
+              id="image-upload"
+            />
+            <label
+              htmlFor="image-upload"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:border-muted-foreground/50 transition-colors cursor-pointer text-sm"
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>Adaugă fotografie</span>
+            </label>
+            <p className="mt-2 text-xs text-muted-foreground">
+              JPG, PNG sau WebP, max {IMAGE_VALIDATION.MAX_SIZE / (1024 * 1024)}MB
+            </p>
+          </div>
+        )}
+
+        {errors.image && (
+          <p className="mt-1.5 text-xs text-destructive">{errors.image}</p>
+        )}
       </div>
 
       {/* Price (for marketplace categories) */}

@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Home, Bookmark, ShoppingBag, User, Plus, RefreshCw } from 'lucide-react';
+import { Home, Bookmark, ShoppingBag, User, Plus, RefreshCw, Settings } from 'lucide-react';
 import { Button, Card, Avatar } from '@/components/ui';
 import { FeedClient, FeedSkeleton, NoNeighborhoodState } from '@/components/feed';
 import { NotificationBell } from '@/components/layout';
@@ -181,6 +181,11 @@ export default async function FeedPage({ searchParams }: PageProps) {
                 </Button>
               </form>
               <NotificationBell />
+              <Link href="/settings">
+                <Button variant="ghost" size="sm">
+                  <Settings className="w-5 h-5" />
+                </Button>
+              </Link>
             </div>
           </div>
         </header>

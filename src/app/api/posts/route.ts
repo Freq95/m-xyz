@@ -13,6 +13,7 @@ import { postRateLimit } from '@/lib/rate-limit';
 import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
 import { redis, CACHE_KEYS, CACHE_TTL, invalidateFeedCache } from '@/lib/redis/client';
+import { uploadPostImage, deletePostImage } from '@/lib/supabase/storage';
 
 /**
  * GET /api/posts - Get posts feed for a neighborhood
@@ -196,9 +197,41 @@ export async function POST(request: NextRequest) {
       throw new AuthorizationError('Trebuie să selectezi un cartier pentru a posta');
     }
 
-    // Parse and validate input
-    const body = await request.json();
-    const validatedData = createPostSchema.parse(body);
+    // Parse FormData or JSON
+    const contentType = request.headers.get('content-type') || '';
+    let validatedData;
+    let imageFile: File | null = null;
+
+    if (contentType.includes('multipart/form-data')) {
+      // Handle FormData (with image)
+      const formData = await request.formData();
+
+      // Extract text fields
+      const title = formData.get('title') as string | null;
+      const body = formData.get('body') as string;
+      const category = formData.get('category') as string;
+      const priceCents = formData.get('priceCents') as string | null;
+      const isFree = formData.get('isFree') as string | null;
+
+      // Extract image file
+      const image = formData.get('image') as File | null;
+      if (image && image.size > 0) {
+        imageFile = image;
+      }
+
+      // Validate data
+      validatedData = createPostSchema.parse({
+        title: title || undefined,
+        body,
+        category,
+        priceCents: priceCents ? parseInt(priceCents, 10) : undefined,
+        isFree: isFree === 'true',
+      });
+    } else {
+      // Handle JSON (no image)
+      const body = await request.json();
+      validatedData = createPostSchema.parse(body);
+    }
 
     // Sanitize text content to prevent XSS
     const sanitizedTitle = validatedData.title ? sanitizeText(validatedData.title) : null;
@@ -209,33 +242,67 @@ export async function POST(request: NextRequest) {
       throw new AuthorizationError('Conținutul este prea scurt după curățare');
     }
 
-    // Create post
-    const post = await prisma.post.create({
-      data: {
-        neighborhoodId: dbUser.neighborhoodId,
-        authorId: dbUser.id,
-        title: sanitizedTitle,
-        body: sanitizedBody,
-        category: validatedData.category,
-        priceCents: validatedData.priceCents,
-        isFree: validatedData.isFree ?? false,
-        // Set expiry for marketplace posts (30 days)
-        expiresAt:
-          ['SELL', 'BUY', 'SERVICE'].includes(validatedData.category)
-            ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-            : null,
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            fullName: true,
-            displayName: true,
-            avatarUrl: true,
-          },
+    // Upload image if provided
+    let imageData: { url: string; thumbnailUrl: string | null; width: number | null; height: number | null; sizeBytes: number } | null = null;
+
+    if (imageFile) {
+      try {
+        imageData = await uploadPostImage(imageFile, dbUser.id);
+      } catch (error) {
+        throw new AuthorizationError(
+          error instanceof Error ? error.message : 'Eroare la încărcarea imaginii'
+        );
+      }
+    }
+
+    // Create post with transaction for rollback support
+    let post;
+    try {
+      post = await prisma.post.create({
+        data: {
+          neighborhoodId: dbUser.neighborhoodId,
+          authorId: dbUser.id,
+          title: sanitizedTitle,
+          body: sanitizedBody,
+          category: validatedData.category,
+          priceCents: validatedData.priceCents,
+          isFree: validatedData.isFree ?? false,
+          // Set expiry for marketplace posts (30 days)
+          expiresAt:
+            ['SELL', 'BUY', 'SERVICE'].includes(validatedData.category)
+              ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+              : null,
+          // Create image record if uploaded
+          images: imageData ? {
+            create: {
+              url: imageData.url,
+              thumbnailUrl: imageData.thumbnailUrl,
+              width: imageData.width,
+              height: imageData.height,
+              sizeBytes: imageData.sizeBytes,
+              position: 0,
+            },
+          } : undefined,
         },
-      },
-    });
+        include: {
+          author: {
+            select: {
+              id: true,
+              fullName: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          },
+          images: true,
+        },
+      });
+    } catch (error) {
+      // Rollback: delete uploaded image if post creation failed
+      if (imageData) {
+        await deletePostImage(imageData.url);
+      }
+      throw error;
+    }
 
     // Invalidate feed cache since new post was created
     await invalidateFeedCache();
@@ -254,6 +321,11 @@ export async function POST(request: NextRequest) {
         name: post.author.displayName || post.author.fullName,
         avatarUrl: post.author.avatarUrl,
       },
+      images: post.images.map((img: { id: string; url: string; thumbnailUrl: string | null }) => ({
+        id: img.id,
+        url: img.url,
+        thumbnailUrl: img.thumbnailUrl,
+      })),
     });
   } catch (error) {
     console.error('POST /api/posts error:', error);

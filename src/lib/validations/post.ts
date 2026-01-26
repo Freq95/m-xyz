@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+// Image upload validation constants
+export const IMAGE_VALIDATION = {
+  MAX_SIZE: 5 * 1024 * 1024, // 5MB
+  MAX_COUNT: 1,
+  ALLOWED_TYPES: ['image/jpeg', 'image/png', 'image/webp'] as const,
+  ALLOWED_EXTENSIONS: ['.jpg', '.jpeg', '.png', '.webp'] as const,
+} as const;
+
 export const postCategoryEnum = z.enum([
   'ALERT',
   'SELL',

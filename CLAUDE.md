@@ -1,6 +1,6 @@
 # Vecinu - Session State
 
-**Last Updated:** 2026-01-26
+**Last Updated:** 2026-01-27
 **Build Status:** PASSING
 **Current Phase:** Phase 5 - Polish & Preparation (IN PROGRESS)
 
@@ -15,7 +15,7 @@
 | Phase 3 | ✅ COMPLETE (100%) |
 | Phase 4 | ✅ COMPLETE (100%) |
 | Phase 5 | 🟡 IN PROGRESS (50%) |
-| Last Session | 2026-01-26 Claude - Feed Performance Fixes & Cache Optimization |
+| Last Session | 2026-01-27 Claude - Settings Page Implementation |
 | Pending Review | None |
 | Blockers | None |
 
@@ -49,19 +49,66 @@ Implemented this session:
 - [x] Wrapped app with ErrorBoundary and ToastProvider
 
 **Remaining for Phase 5:**
+- [x] Settings page ✅
 - [ ] Privacy policy page
 - [ ] Terms of Service page
 - [ ] Account deletion flow (GDPR)
-- [ ] SEO meta tags
 - [ ] About page
 - [ ] "How it works" page
 - [ ] GDPR data export endpoint
+- [ ] Email notifications (Resend integration) - Package installed but not integrated
 
 Reference: `docs/PLAN.md` Phase 5 section for full requirements
 
 ---
 
 ## Completed This Session
+
+**Phase 5.6: Settings Page Implementation** - ✅ COMPLETE
+
+1. [x] Created settings validation schemas (`src/lib/validations/settings.ts`)
+2. [x] Created settings API route (`src/app/api/user/settings/route.ts`) - GET + PATCH
+3. [x] Created settings page UI (`src/app/(main)/settings/page.tsx`)
+4. [x] Added Settings icon to header (next to notification bell)
+5. [x] Implemented profile settings (displayName, bio with character counters)
+6. [x] Implemented notification preferences (email_comments, email_alerts, email_digest)
+7. [x] Added location display (shows current neighborhood from DB)
+8. [x] Added email display (shows user email from DB)
+9. [x] Fixed API response data extraction bug (response.data wrapper)
+10. [x] Added save button with change detection (only enabled when dirty)
+11. [x] Added Toast notifications for success/error feedback
+12. [x] Test build and TypeScript checks
+
+**Files Created:**
+- `src/lib/validations/settings.ts` - Zod schemas for settings validation
+- `src/app/api/user/settings/route.ts` - GET/PATCH endpoints with CSRF protection
+- `src/app/(main)/settings/page.tsx` - Full settings UI with all sections
+
+**Files Modified:**
+- `src/app/(main)/feed/page.tsx` - Added Settings icon to header
+- `src/middleware.ts` - Already configured (settings in protected routes)
+
+**Features Working:**
+- Navigate to `/settings` (requires authentication) ✓
+- View current settings loaded from database ✓
+- Edit displayName with character counter (max 50) ✓
+- Edit bio with character counter (x/500) ✓
+- Toggle email notification checkboxes ✓
+- Change email digest dropdown (zilnic/săptămânal/niciodată) ✓
+- Save button only enabled when changes detected ✓
+- Success toast on save ✓
+- Settings persist after page reload ✓
+- Email and neighborhood display from database ✓
+
+**Known Limitations:**
+- **Email notifications NOT sent** - Resend package installed but not integrated (settings save to DB only, no actual emails sent)
+- Push notifications shown as "În curând" (disabled)
+- Language selector read-only "Română" (future: multi-language)
+- Neighborhood change requires separate flow (onboarding)
+
+---
+
+## Completed Previous Sessions
 
 **Phase 5.5: Advanced Performance Optimizations** - ✅ COMPLETE
 
@@ -328,14 +375,21 @@ None currently - previous issues have been fixed:
 - **Optimistic updates:** Save/bookmark feels instant (UI updates before API)
 - **Image blur placeholders:** Shimmer effect while images load
 - **Bundle optimization:** SWC minify, console.log removal in production
+- **Settings page:** Full user settings with profile, notifications, location
+- **Settings icon:** Added to header next to notification bell
+
+**What's NOT Working (Known Limitations):**
+- **Email notifications:** Settings UI exists and saves to DB, but Resend integration not implemented (no actual emails sent)
+- Push notifications: Shown as "coming soon" in settings
 
 **Next Steps (Phase 5 - Polish):**
 1. ✅ Error handling (user-friendly Romanian messages)
 2. ✅ Error boundary component
 3. ✅ Performance optimization (feed caching, image lazy loading, server components, DB indexes)
-4. SEO meta tags
+4. ✅ Settings page
 5. Legal pages (Privacy, Terms)
 6. GDPR data export/deletion
+7. Email notifications (Resend integration)
 
 **Technical Notes:**
 - Posts API: `/api/posts` (GET list, POST create), `/api/posts/[id]` (GET, PATCH, DELETE)
@@ -343,6 +397,7 @@ None currently - previous issues have been fixed:
 - Search API: `/api/search?q=query&neighborhood=slug`
 - Users API: `/api/users/[id]` (GET profile), `/api/users/[id]/posts` (GET posts)
 - User Profile API: `/api/user/profile` (PATCH displayName/bio)
+- User Settings API: `/api/user/settings` (GET current settings, PATCH update settings)
 - Saved API: `/api/posts/saved` (GET list), `/api/posts/[id]/save` (GET/POST/DELETE)
 - Comments API: `/api/comments` (GET with replies, POST), `/api/comments/[id]` (PATCH, DELETE)
 - Replies API: `/api/comments/[id]/replies` (GET all replies for a comment)
