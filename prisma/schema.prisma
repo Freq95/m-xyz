@@ -125,8 +125,9 @@ model Post {
   comments   Comment[]
   savedBy    SavedPost[]
 
-  @@index([neighborhoodId, createdAt(sort: Desc)])
-  @@index([neighborhoodId, category, createdAt(sort: Desc)])
+  @@index([neighborhoodId, status, createdAt(sort: Desc)])
+  @@index([neighborhoodId, status, category, createdAt(sort: Desc)])
+  @@index([neighborhoodId, status, isPinned, createdAt(sort: Desc)])
   @@index([authorId, createdAt(sort: Desc)])
   @@map("posts")
 }

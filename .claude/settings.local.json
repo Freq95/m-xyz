@@ -55,7 +55,8 @@
       "Bash(npx prisma generate:*)",
       "Bash(npx prisma db push:*)",
       "Bash(D:)",
-      "Bash(npm --prefix \"d:/m-vecinu-xyz\" run build)"
+      "Bash(npm --prefix \"d:/m-vecinu-xyz\" run build)",
+      "Bash(timeout /t 3)"
     ]
   }
 }

@@ -7,6 +7,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ro } from 'date-fns/locale';
 import { MessageCircle, MoreHorizontal, Eye, Bookmark, Share2, Flag, Link as LinkIcon } from 'lucide-react';
 import { Button, Card, Avatar } from '@/components/ui';
+import { getImagePlaceholder } from '@/lib/utils';
 import type { PostCategory } from '@/lib/validations/post';
 
 interface PostCardProps {
@@ -98,7 +99,7 @@ export function PostCard({ post }: PostCardProps) {
 
           {/* Title */}
           {post.title && (
-            <Link href={`/post/${post.id}`}>
+            <Link href={`/post/${post.id}`} prefetch={true}>
               <h3 className="font-medium text-sm mb-1 hover:text-primary transition-colors">
                 {post.title}
               </h3>
@@ -106,7 +107,7 @@ export function PostCard({ post }: PostCardProps) {
           )}
 
           {/* Body */}
-          <Link href={`/post/${post.id}`}>
+          <Link href={`/post/${post.id}`} prefetch={true}>
             <p className="text-sm mb-3 line-clamp-3 hover:text-foreground/80 transition-colors">
               {post.body}
             </p>
@@ -129,7 +130,7 @@ export function PostCard({ post }: PostCardProps) {
 
           {/* Images Preview */}
           {post.images.length > 0 && (
-            <Link href={`/post/${post.id}`} className="block mb-3">
+            <Link href={`/post/${post.id}`} className="block mb-3" prefetch={true}>
               <div className={`grid gap-1 rounded-lg overflow-hidden ${
                 post.images.length === 1 ? 'grid-cols-1' :
                 post.images.length === 2 ? 'grid-cols-2' :
@@ -149,6 +150,8 @@ export function PostCard({ post }: PostCardProps) {
                       sizes="(max-width: 768px) 50vw, 200px"
                       className="object-cover"
                       loading="lazy"
+                      placeholder="blur"
+                      blurDataURL={getImagePlaceholder(200, 128)}
                     />
                     {index === 3 && post.images.length > 4 && (
                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
@@ -380,16 +383,23 @@ function SaveButton({ postId, initialSaved }: { postId: string; initialSaved?: b
   }, [postId, hasFetched]);
 
   const handleToggleSave = async () => {
+    // Optimistic update - update UI immediately
+    const previousSaved = isSaved;
+    setIsSaved(!isSaved);
     setIsLoading(true);
+
     try {
-      const method = isSaved ? 'DELETE' : 'POST';
+      const method = isSaved ? 'POST' : 'DELETE'; // Inverted because we already toggled
       const response = await fetch(`/api/posts/${postId}/save`, { method });
 
-      if (response.ok) {
-        setIsSaved(!isSaved);
+      if (!response.ok) {
+        // Revert on error
+        setIsSaved(previousSaved);
       }
     } catch (err) {
       console.error('Failed to toggle save:', err);
+      // Revert on error
+      setIsSaved(previousSaved);
     } finally {
       setIsLoading(false);
     }

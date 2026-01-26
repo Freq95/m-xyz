@@ -88,3 +88,25 @@ export function sleep(ms: number): Promise<void> {
 export function isServer(): boolean {
   return typeof window === 'undefined';
 }
+
+/**
+ * Generate a shimmer SVG data URL for image placeholders
+ */
+export function getImagePlaceholder(width: number = 400, height: number = 300): string {
+  const shimmer = `
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="shimmer" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#f6f7f8" />
+          <stop offset="50%" stop-color="#edeef1" />
+          <stop offset="100%" stop-color="#f6f7f8" />
+          <animateTransform attributeName="gradientTransform" type="translate" from="-1 0" to="1 0" dur="1.5s" repeatCount="indefinite" />
+        </linearGradient>
+      </defs>
+      <rect width="${width}" height="${height}" fill="url(#shimmer)" />
+    </svg>
+  `;
+
+  const base64 = Buffer.from(shimmer).toString('base64');
+  return `data:image/svg+xml;base64,${base64}`;
+}

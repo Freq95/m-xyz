@@ -40,9 +40,9 @@ export async function GET(request: NextRequest) {
 
     // Try to get from cache
     if (shouldCache && cacheKey && redis) {
-      const cached = await redis.get(cacheKey);
+      const cached = await redis.get<{ data: any[]; meta: { cursor?: string; hasMore: boolean } }>(cacheKey);
       if (cached) {
-        return successResponse(cached);
+        return successResponse(cached.data, cached.meta);
       }
     }
 
@@ -130,9 +130,13 @@ export async function GET(request: NextRequest) {
       })),
     }));
 
-    // Store in cache
+    // Store in cache (with metadata)
     if (shouldCache && cacheKey && redis) {
-      await redis.set(cacheKey, responseData, { ex: CACHE_TTL.FEED });
+      const cacheData = {
+        data: responseData,
+        meta: { cursor: nextCursor, hasMore }
+      };
+      await redis.set(cacheKey, cacheData, { ex: CACHE_TTL.FEED });
     }
 
     return successResponse(responseData, { cursor: nextCursor, hasMore });

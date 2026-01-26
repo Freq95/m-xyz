@@ -24,7 +24,7 @@ export const CACHE_KEYS = {
 
 // Cache TTLs (in seconds)
 export const CACHE_TTL = {
-  FEED: 300, // 5 minutes
+  FEED: 900, // 15 minutes
   POST: 600, // 10 minutes
 } as const;
 
