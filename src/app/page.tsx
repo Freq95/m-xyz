@@ -94,7 +94,7 @@ export default function HomePage() {
 
         {/* CTA */}
         <section className="py-20 px-4">
-          <div className="mx-auto max-w-2xl text-center">
+          <div className="mx-auto max-w-4xl text-center">
             <h2 className="text-2xl font-bold mb-4">Gata să începi?</h2>
             <p className="text-muted-foreground mb-8">
               Înregistrează-te gratuit și conectează-te cu cartierul tău.

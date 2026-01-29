@@ -38,12 +38,14 @@ interface FeedClientProps {
   initialHasMore: boolean;
   neighborhoodSlug: string;
   selectedCategory?: PostCategory | 'ALL';
+  selectedFilter?: string;
 }
 
-const categories: { value: PostCategory | 'ALL'; label: string }[] = [
+const categories: { value: PostCategory | 'ALL' | 'GRATUIT'; label: string }[] = [
   { value: 'ALL', label: 'Toate' },
   { value: 'ALERT', label: 'Alerte' },
   { value: 'SELL', label: 'Vând' },
+  { value: 'GRATUIT', label: 'Gratuit' },
   { value: 'BUY', label: 'Cumpăr' },
   { value: 'SERVICE', label: 'Servicii' },
   { value: 'QUESTION', label: 'Întrebări' },
@@ -57,6 +59,7 @@ export function FeedClient({
   initialHasMore,
   neighborhoodSlug,
   selectedCategory = 'ALL',
+  selectedFilter,
 }: FeedClientProps) {
   const router = useRouter();
   const [posts, setPosts] = useState(initialPosts);
@@ -117,6 +120,10 @@ export function FeedClient({
         params.append('category', selectedCategory);
       }
 
+      if (selectedFilter) {
+        params.append('filter', selectedFilter);
+      }
+
       // Prefetch using fetch with low priority
       fetch(`/api/posts?${params}`, { priority: 'low' as any });
     } catch (err) {
@@ -126,12 +133,14 @@ export function FeedClient({
     }
   };
 
-  const handleCategoryChange = (category: PostCategory | 'ALL') => {
+  const handleCategoryChange = (category: PostCategory | 'ALL' | 'GRATUIT') => {
     if (isPending) return; // Prevent double clicks
 
     startTransition(() => {
       const params = new URLSearchParams();
-      if (category !== 'ALL') {
+      if (category === 'GRATUIT') {
+        params.set('filter', 'gratuit');
+      } else if (category !== 'ALL') {
         params.set('category', category);
       }
       router.push(`/feed?${params.toString()}`);
@@ -154,6 +163,10 @@ export function FeedClient({
         params.append('category', selectedCategory);
       }
 
+      if (selectedFilter) {
+        params.append('filter', selectedFilter);
+      }
+
       const response = await fetch(`/api/posts?${params}`);
       const result = await response.json();
 
@@ -172,15 +185,17 @@ export function FeedClient({
   return (
     <>
       {/* Category Filter Tabs */}
-      <div className="flex gap-1.5 mb-4 justify-between">
+      <div className="flex flex-wrap gap-2 mb-4">
         {categories.map((cat) => (
           <button
             key={cat.value}
             onClick={() => handleCategoryChange(cat.value)}
-            className={`px-2 py-1 rounded-full text-xs transition-colors ${
-              selectedCategory === cat.value
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+            aria-label={`Filtrează după ${cat.label}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              (cat.value === 'GRATUIT' && selectedFilter === 'gratuit') ||
+              (cat.value !== 'GRATUIT' && !selectedFilter && selectedCategory === cat.value)
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'bg-muted text-foreground hover:bg-muted/80 border border-border'
             } ${isPending ? 'opacity-50 pointer-events-none' : ''}`}
           >
             {cat.label}
@@ -191,8 +206,20 @@ export function FeedClient({
       {/* Empty State or Posts List */}
       {posts.length === 0 ? (
         <EmptyState
-          title={selectedCategory !== 'ALL' ? 'Nu sunt postări în categoria selectată' : 'Nu sunt postări încă'}
-          description={selectedCategory !== 'ALL' ? 'Încearcă altă categorie sau creează o postare.' : 'Fii primul care postează în cartierul tău!'}
+          title={
+            selectedFilter === 'gratuit'
+              ? 'Nu sunt obiecte gratuite momentan'
+              : selectedCategory !== 'ALL'
+                ? 'Nu sunt postări în categoria selectată'
+                : 'Nu sunt postări încă'
+          }
+          description={
+            selectedFilter === 'gratuit'
+              ? 'Fii primul care oferă ceva gratuit vecinilor!'
+              : selectedCategory !== 'ALL'
+                ? 'Încearcă altă categorie sau creează o postare.'
+                : 'Fii primul care postează în cartierul tău!'
+          }
         />
       ) : (
         <>

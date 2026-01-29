@@ -13,9 +13,10 @@ export const isRedisEnabled = () => redis !== null;
 
 // Cache keys
 export const CACHE_KEYS = {
-  FEED: (params: { categorySlug?: string; neighborhoodSlug?: string }) => {
+  FEED: (params: { categorySlug?: string; filterSlug?: string; neighborhoodSlug?: string }) => {
     const parts = ['feed'];
     if (params.categorySlug) parts.push(`cat:${params.categorySlug}`);
+    if (params.filterSlug) parts.push(`filter:${params.filterSlug}`);
     if (params.neighborhoodSlug) parts.push(`nbh:${params.neighborhoodSlug}`);
     return parts.join(':');
   },
@@ -33,10 +34,21 @@ export async function invalidateFeedCache() {
   if (!redis) return;
 
   try {
-    // Get all feed cache keys
-    const keys = await redis.keys('feed:*');
-    if (keys.length > 0) {
-      await redis.del(...keys);
+    // Use SCAN instead of KEYS to avoid blocking the server
+    const allKeys: string[] = [];
+    let cursor = 0;
+
+    do {
+      const result = await redis.scan(cursor, {
+        match: 'feed:*',
+        count: 100,
+      });
+      cursor = typeof result[0] === 'string' ? parseInt(result[0], 10) : result[0];
+      allKeys.push(...result[1]);
+    } while (cursor !== 0);
+
+    if (allKeys.length > 0) {
+      await redis.del(...allKeys);
     }
   } catch (error) {
     console.error('Failed to invalidate feed cache:', error);

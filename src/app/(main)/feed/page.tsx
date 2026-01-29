@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Home, Bookmark, ShoppingBag, User, Plus, RefreshCw, Settings } from 'lucide-react';
+import { RefreshCw, Settings } from 'lucide-react';
 import { Button, Card, Avatar } from '@/components/ui';
 import { FeedClient, FeedSkeleton, NoNeighborhoodState } from '@/components/feed';
 import { NotificationBell } from '@/components/layout';
@@ -11,7 +11,7 @@ import { redis, CACHE_KEYS, CACHE_TTL } from '@/lib/redis/client';
 import type { PostCategory } from '@/lib/validations/post';
 
 interface PageProps {
-  searchParams: { category?: string };
+  searchParams: { category?: string; filter?: string };
 }
 
 async function getUserData(userId: string) {
@@ -35,13 +35,14 @@ async function getUserData(userId: string) {
   return user;
 }
 
-async function getPosts(neighborhoodSlug: string, category?: string) {
+async function getPosts(neighborhoodSlug: string, category?: string, filter?: string) {
   // Try cache first - cache ALL queries including filtered categories
   const shouldCache = !!redis;
   const cacheKey = shouldCache
     ? CACHE_KEYS.FEED({
         neighborhoodSlug,
         categorySlug: category,
+        filterSlug: filter,
       })
     : null;
 
@@ -69,6 +70,10 @@ async function getPosts(neighborhoodSlug: string, category?: string) {
       neighborhoodId: neighborhood.id,
       status: 'active',
       ...(category && category !== 'ALL' && { category }),
+      ...(filter === 'gratuit' && {
+        category: 'SELL',
+        isFree: true,
+      }),
     },
     orderBy: [
       { isPinned: 'desc' },
@@ -133,8 +138,8 @@ async function getPosts(neighborhoodSlug: string, category?: string) {
   return result;
 }
 
-async function FeedPosts({ neighborhoodSlug, category }: { neighborhoodSlug: string; category?: string }) {
-  const { posts, hasMore, cursor } = await getPosts(neighborhoodSlug, category);
+async function FeedPosts({ neighborhoodSlug, category, filter }: { neighborhoodSlug: string; category?: string; filter?: string }) {
+  const { posts, hasMore, cursor } = await getPosts(neighborhoodSlug, category, filter);
 
   return (
     <FeedClient
@@ -143,6 +148,7 @@ async function FeedPosts({ neighborhoodSlug, category }: { neighborhoodSlug: str
       initialHasMore={hasMore}
       neighborhoodSlug={neighborhoodSlug}
       selectedCategory={(category as PostCategory) || 'ALL'}
+      selectedFilter={filter}
     />
   );
 }
@@ -157,12 +163,13 @@ export default async function FeedPage({ searchParams }: PageProps) {
     }
 
     const category = searchParams.category;
+    const filter = searchParams.filter;
 
     return (
       <div className="min-h-screen bg-background">
         {/* Header */}
         <header className="sticky top-0 z-50 bg-background border-b border-border">
-          <div className="mx-auto max-w-2xl px-4 py-3 flex items-center justify-between">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                 <span className="text-primary-foreground font-bold text-sm">V</span>
@@ -176,13 +183,13 @@ export default async function FeedPage({ searchParams }: PageProps) {
             </div>
             <div className="flex items-center gap-1">
               <form action="/feed">
-                <Button variant="ghost" size="sm" type="submit">
+                <Button variant="ghost" size="sm" type="submit" aria-label="Reîmprospătează feed-ul">
                   <RefreshCw className="w-5 h-5" />
                 </Button>
               </form>
               <NotificationBell />
               <Link href="/settings">
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" aria-label="Deschide setările">
                   <Settings className="w-5 h-5" />
                 </Button>
               </Link>
@@ -191,7 +198,7 @@ export default async function FeedPage({ searchParams }: PageProps) {
         </header>
 
         {/* Main Content */}
-        <main className="mx-auto max-w-2xl px-4 py-4 pb-24">
+        <main className="mx-auto max-w-4xl px-4 py-4 pb-24">
           {/* Create Post Button */}
           <Card className="p-4 mb-4">
             <div className="flex items-center gap-3">
@@ -214,44 +221,10 @@ export default async function FeedPage({ searchParams }: PageProps) {
             <NoNeighborhoodState />
           ) : (
             <Suspense fallback={<FeedSkeleton />}>
-              <FeedPosts neighborhoodSlug={user.neighborhood.slug} category={category} />
+              <FeedPosts neighborhoodSlug={user.neighborhood.slug} category={category} filter={filter} />
             </Suspense>
           )}
         </main>
-
-        {/* Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border">
-          <div className="mx-auto max-w-2xl px-4">
-            <div className="flex items-center justify-around py-2">
-              <Link href="/feed" className="flex flex-col items-center gap-1 px-4 py-2 text-primary">
-                <Home className="w-5 h-5" />
-                <span className="text-xs">Acasă</span>
-              </Link>
-              <button
-                className="flex flex-col items-center gap-1 px-4 py-2 text-muted-foreground opacity-50 cursor-not-allowed"
-                title="În curând"
-                disabled
-              >
-                <ShoppingBag className="w-5 h-5" />
-                <span className="text-xs">Piață</span>
-              </button>
-              <Link
-                href="/post/new"
-                className="flex items-center justify-center w-12 h-12 -mt-4 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors"
-              >
-                <Plus className="w-6 h-6" />
-              </Link>
-              <Link href="/saved" className="flex flex-col items-center gap-1 px-4 py-2 text-muted-foreground hover:text-primary transition-colors">
-                <Bookmark className="w-5 h-5" />
-                <span className="text-xs">Salvate</span>
-              </Link>
-              <Link href={`/profile/${user.id}`} className="flex flex-col items-center gap-1 px-4 py-2 text-muted-foreground hover:text-primary transition-colors">
-                <User className="w-5 h-5" />
-                <span className="text-xs">Profil</span>
-              </Link>
-            </div>
-          </div>
-        </nav>
       </div>
     );
   } catch (error) {

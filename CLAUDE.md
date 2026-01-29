@@ -1,6 +1,6 @@
 # Vecinu - Session State
 
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-01-29
 **Build Status:** PASSING
 **Current Phase:** Phase 5 - Polish & Preparation (IN PROGRESS)
 
@@ -14,8 +14,8 @@
 | Phase 2 | ✅ COMPLETE (100%) |
 | Phase 3 | ✅ COMPLETE (100%) |
 | Phase 4 | ✅ COMPLETE (100%) |
-| Phase 5 | 🟡 IN PROGRESS (50%) |
-| Last Session | 2026-01-27 Claude - Settings Page Implementation |
+| Phase 5 | 🟡 IN PROGRESS (60%) |
+| Last Session | 2026-01-29 Claude - UX & Accessibility Improvements (Phase 3) |
 | Pending Review | None |
 | Blockers | None |
 
@@ -26,6 +26,15 @@
 **Phase 5: IN PROGRESS**
 
 Implemented this session:
+- [x] **Fixed SaveButton race condition** (method determined before state toggle)
+- [x] **Added cache invalidation to PATCH/DELETE** (posts/[id]/route.ts)
+- [x] **Removed dead code** (getImageDimensions in storage.ts)
+- [x] **Replaced Redis KEYS with SCAN** (non-blocking cache invalidation)
+- [x] **Rate limiting**: save (60/hr), admin (100/min), search (30/min)
+- [x] **Notification preferences check** (respects email_comments setting)
+- [x] **Success toast** on post creation
+
+Implemented in previous sessions:
 - [x] Fixed category filter bugs (filters disappeared on empty categories)
 - [x] Fixed category content not updating (added useEffect for props sync)
 - [x] Fixed cursor "not-allowed" on filter buttons (pointer-events-none instead of disabled)
@@ -63,6 +72,72 @@ Reference: `docs/PLAN.md` Phase 5 section for full requirements
 ---
 
 ## Completed This Session
+
+**Phase 5.8: UX & Accessibility Improvements** - ✅ COMPLETE
+
+**Accessibility Fixes:**
+1. [x] Added aria-labels to all icon-only buttons (SaveButton, NotificationBell, PostCardMenu, Refresh, Settings)
+2. [x] Replaced native confirm() and alert() with custom ConfirmModal and toast notifications
+3. [x] Added Escape key handlers to all modals (report, edit, confirm, delete)
+4. [x] Improved image alt text in PostCard (descriptive text based on post title/body)
+
+**Component Created:**
+- `src/components/shared/confirm-modal.tsx` - Reusable confirmation modal with accessibility features (Escape key, focus management, aria-labels)
+
+**Files Modified:**
+- `src/components/feed/post-card.tsx` - Added aria-label to SaveButton, improved image alt text
+- `src/app/(main)/post/[id]/page.tsx` - Replaced 2 confirm() and 4 alert() calls with ConfirmModal and toast
+- `src/components/shared/index.ts` - Exported ConfirmModal
+- `src/app/(admin)/admin/posts/page.tsx` - Fixed Avatar size prop (xs → sm)
+
+**Bug Fixes (TypeScript):**
+- Fixed Avatar size="xs" errors (changed to size="sm")
+- Fixed notifications API response structure (moved unreadCount to data)
+- Fixed neighborhood status check (isActive instead of status)
+- Fixed Prisma JsonValue type errors in admin.service.ts and notification.service.ts
+
+**Impact:**
+- ✅ All icon buttons now accessible to screen readers
+- ✅ No more jarring native browser dialogs
+- ✅ Keyboard-friendly modals (Escape to close)
+- ✅ Images accessible with descriptive alt text
+- ✅ Better UX with toast notifications instead of alert()
+- ✅ Production build passing with no TypeScript errors
+
+---
+
+## Completed Previous Session
+
+**Phase 5.7: Critical Bug Fixes & Rate Limiting** - ✅ COMPLETE
+
+**Bug Fixes:**
+1. [x] SaveButton race condition (post-card.tsx) - Method captured before state toggle
+2. [x] Cache invalidation on updates (posts/[id]/route.ts) - Added to PATCH & DELETE
+3. [x] Dead code removal (storage.ts) - Removed browser-only getImageDimensions()
+4. [x] Redis KEYS → SCAN (redis/client.ts) - Non-blocking cache invalidation
+
+**Rate Limiting Added:**
+- `/api/posts/[id]/save` - 60 saves/hour (user-based)
+- `/api/admin/*` - 100 requests/minute (admin-based)
+- `/api/search` - 30 searches/minute (IP-based)
+
+**Improvements:**
+- Notification preferences respected (checks email_comments before creating notifications)
+- Success toast on post creation (better UX feedback)
+
+**Files Modified:**
+- `src/components/feed/post-card.tsx` - Fixed race condition
+- `src/app/api/posts/[id]/route.ts` - Added cache invalidation
+- `src/lib/supabase/storage.ts` - Removed dead code
+- `src/lib/redis/client.ts` - Replaced KEYS with SCAN
+- `src/lib/rate-limit.ts` - Added 3 new rate limiters
+- `src/app/api/posts/[id]/save/route.ts` - Added rate limiting
+- `src/app/api/admin/*` - Added rate limiting to 8 endpoints
+- `src/app/api/search/route.ts` - Added rate limiting
+- `src/lib/services/notification.service.ts` - Check preferences
+- `src/components/feed/post-form.tsx` - Added success toast
+
+---
 
 **Phase 5.6: Settings Page Implementation** - ✅ COMPLETE
 
@@ -349,7 +424,7 @@ None currently - previous issues have been fixed:
 - Save/bookmark posts (with persistent state)
 - Share posts (Web Share API + clipboard fallback)
 - Report posts functionality
-- In-app notifications (comments and replies)
+- In-app notifications (comments and replies, respects user preferences)
 - Notification bell with unread count
 - Mark as sold for marketplace posts
 - **Admin dashboard with stats**
@@ -361,7 +436,7 @@ None currently - previous issues have been fixed:
 - **Audit logging for all admin actions**
 - Auth flow with proper redirects
 - XSS sanitization on all user content
-- Rate limiting on posts (10/hour) and comments (30/hour)
+- **Rate limiting:** posts (10/hr), comments (30/hr), saves (60/hr), admin (100/min), search (30/min)
 - **Feed caching with Redis (15 min TTL, auto-invalidation, ALL categories cached)**
 - **Category filter fixes:** Filters always visible, no layout shift, instant updates
 - **Image lazy loading with Next.js Image component**
@@ -404,7 +479,7 @@ None currently - previous issues have been fixed:
 - Reports API: `/api/reports` (POST to submit report)
 - Notifications API: `/api/notifications` (GET list), `/api/notifications/[id]/read` (PATCH), `/api/notifications/read-all` (POST)
 - **Admin API:** `/api/admin/stats`, `/api/admin/reports`, `/api/admin/reports/[id]`, `/api/admin/posts`, `/api/admin/posts/[id]`, `/api/admin/comments/[id]`, `/api/admin/users`, `/api/admin/users/[id]`
-- Rate limits: commentRateLimit (30/hour), postRateLimit (10/hour)
+- **Rate limits:** postRateLimit (10/hr), commentRateLimit (30/hr), saveRateLimit (60/hr), adminRateLimit (100/min), searchRateLimit (30/min)
 - All POST/PATCH/DELETE routes have CSRF protection
 - Admin routes require role = 'admin' or 'moderator'
 - To make a user admin: `UPDATE users SET role = 'admin' WHERE email = 'your@email.com';`
@@ -424,10 +499,12 @@ None currently - previous issues have been fixed:
 - **Architecture:** Hybrid pattern - server components for data, client islands for interactivity
 - **Layout Stability:** scrollbar-gutter: stable prevents horizontal shift when scrollbar appears/disappears
 - **Performance Optimizations:**
-  - Optimistic updates: SaveButton updates UI immediately, reverts on error
+  - Optimistic updates: SaveButton updates UI immediately (race condition fixed), reverts on error
   - Image placeholders: getImagePlaceholder() generates shimmer SVG data URLs
   - Bundle optimization: next.config.js configured with SWC minify, console.log removal
   - Bundle analyzer: Optional package (@next/bundle-analyzer), gracefully handles if not installed
+  - Redis cache invalidation: Uses SCAN instead of KEYS (non-blocking at scale)
+  - Cache invalidation on updates: PATCH/DELETE operations clear feed cache
 
 ---
 

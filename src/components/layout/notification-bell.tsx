@@ -49,7 +49,7 @@ export function NotificationBell() {
         const response = await fetch('/api/notifications?limit=1');
         if (response.ok) {
           const result = await response.json();
-          setUnreadCount(result.meta?.unreadCount ?? 0);
+          setUnreadCount(result.data?.unreadCount ?? 0);
         }
       } catch (err) {
         console.error('Failed to fetch notifications:', err);
@@ -76,8 +76,8 @@ export function NotificationBell() {
       const response = await fetch('/api/notifications?limit=10');
       if (response.ok) {
         const result = await response.json();
-        setNotifications(result.data || []);
-        setUnreadCount(result.meta?.unreadCount ?? 0);
+        setNotifications(result.data?.notifications || []);
+        setUnreadCount(result.data?.unreadCount ?? 0);
         setHasFetched(true);
       }
     } catch (err) {
@@ -136,6 +136,7 @@ export function NotificationBell() {
         size="sm"
         className="relative"
         onClick={() => setIsOpen(!isOpen)}
+        aria-label={`Notificări${unreadCount > 0 ? ` (${unreadCount} necitite)` : ''}`}
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (

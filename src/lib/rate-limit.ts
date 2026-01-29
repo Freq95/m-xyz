@@ -63,6 +63,36 @@ export const apiRateLimit = redis && Ratelimit
     })
   : null;
 
+// Save/bookmark rate limiter: 60 saves per hour
+export const saveRateLimit = redis && Ratelimit
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(60, '1 h'),
+      analytics: true,
+      prefix: 'ratelimit:save',
+    })
+  : null;
+
+// Admin actions rate limiter: 100 requests per minute
+export const adminRateLimit = redis && Ratelimit
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(100, '1 m'),
+      analytics: true,
+      prefix: 'ratelimit:admin',
+    })
+  : null;
+
+// Search rate limiter: 30 searches per minute
+export const searchRateLimit = redis && Ratelimit
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(30, '1 m'),
+      analytics: true,
+      prefix: 'ratelimit:search',
+    })
+  : null;
+
 /**
  * Get client IP address from request
  */

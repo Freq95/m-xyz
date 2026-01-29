@@ -101,7 +101,7 @@ export default function SavedPostsPage() {
     <div className="min-h-screen bg-background pb-8">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background border-b border-border">
-        <div className="mx-auto max-w-2xl px-4 py-3 flex items-center gap-3">
+        <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
           <Link href="/feed">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-5 h-5" />
@@ -111,7 +111,7 @@ export default function SavedPostsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-4">
+      <main className="mx-auto max-w-4xl px-4 py-4">
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (

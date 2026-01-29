@@ -60,17 +60,20 @@ export async function GET(request: NextRequest) {
     const unreadCount = await getUnreadCount(user.id);
 
     return successResponse(
-      notificationsToReturn.map((notification) => ({
-        id: notification.id,
-        type: notification.type,
-        title: notification.title,
-        body: notification.body,
-        data: notification.data,
-        isRead: notification.isRead,
-        readAt: notification.readAt,
-        createdAt: notification.createdAt,
-      })),
-      { cursor: nextCursor, hasMore, unreadCount }
+      {
+        notifications: notificationsToReturn.map((notification) => ({
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          body: notification.body,
+          data: notification.data,
+          isRead: notification.isRead,
+          readAt: notification.readAt,
+          createdAt: notification.createdAt,
+        })),
+        unreadCount,
+      },
+      { cursor: nextCursor, hasMore }
     );
   } catch (error) {
     return handleApiError(error);

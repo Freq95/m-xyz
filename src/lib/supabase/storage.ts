@@ -17,28 +17,6 @@ interface UploadError {
 }
 
 /**
- * Get image dimensions from a File object
- */
-async function getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({ width: img.width, height: img.height });
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(null);
-    };
-
-    img.src = objectUrl;
-  });
-}
-
-/**
  * Validate image file before upload
  */
 export function validateImageFile(file: File): UploadError | null {
@@ -108,10 +86,6 @@ export async function uploadPostImage(
       data: { publicUrl },
     } = supabase.storage.from(BUCKET_NAME).getPublicUrl(data.path);
 
-    // Get image dimensions (server-side using canvas or similar would be better, but for now return null)
-    // In a real app, you'd use sharp or similar library on the server
-    const dimensions = null; // await getImageDimensions(file); // Can't run in Node.js without canvas
-
     // Generate thumbnail URL using Supabase's image transformation
     // Format: {publicUrl}?width=400&height=300
     const thumbnailUrl = `${publicUrl}?width=400&height=300`;
@@ -119,8 +93,8 @@ export async function uploadPostImage(
     return {
       url: publicUrl,
       thumbnailUrl,
-      width: dimensions?.width || null,
-      height: dimensions?.height || null,
+      width: null,
+      height: null,
       sizeBytes: file.size,
     };
   } catch (error) {

@@ -32,7 +32,7 @@ export async function createAuditLog(params: AuditLogParams) {
       targetType: params.targetType,
       targetId: params.targetId,
       reason: params.reason,
-      metadata: params.metadata,
+      metadata: params.metadata as any,
     },
   });
 }

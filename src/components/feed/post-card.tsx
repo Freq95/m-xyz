@@ -145,7 +145,7 @@ export function PostCard({ post }: PostCardProps) {
                   >
                     <Image
                       src={image.thumbnailUrl || image.url}
-                      alt=""
+                      alt={`Imagine postare: ${post.title || post.body.substring(0, 50)}`}
                       fill
                       sizes="(max-width: 768px) 50vw, 200px"
                       className="object-cover"
@@ -214,6 +214,24 @@ function PostCardMenu({ postId }: { postId: string }) {
     };
   }, [isOpen]);
 
+  // Escape key handler for report modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showReportModal && !isReporting) {
+        setShowReportModal(false);
+        setReportReason('');
+      }
+    };
+
+    if (showReportModal) {
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showReportModal, isReporting]);
+
   const handleShare = async () => {
     const postUrl = `${window.location.origin}/post/${postId}`;
 
@@ -279,6 +297,7 @@ function PostCardMenu({ postId }: { postId: string }) {
         size="sm"
         className="h-8 w-8 p-0 flex-shrink-0"
         onClick={() => setIsOpen(!isOpen)}
+        aria-label="Opțiuni postare"
       >
         <MoreHorizontal className="w-4 h-4" />
       </Button>
@@ -385,11 +404,11 @@ function SaveButton({ postId, initialSaved }: { postId: string; initialSaved?: b
   const handleToggleSave = async () => {
     // Optimistic update - update UI immediately
     const previousSaved = isSaved;
+    const method = isSaved ? 'DELETE' : 'POST'; // Determine action BEFORE state toggle
     setIsSaved(!isSaved);
     setIsLoading(true);
 
     try {
-      const method = isSaved ? 'POST' : 'DELETE'; // Inverted because we already toggled
       const response = await fetch(`/api/posts/${postId}/save`, { method });
 
       if (!response.ok) {
@@ -415,6 +434,7 @@ function SaveButton({ postId, initialSaved }: { postId: string; initialSaved?: b
           : 'text-muted-foreground hover:text-primary'
       }`}
       title={isSaved ? 'Șterge din salvate' : 'Salvează'}
+      aria-label={isSaved ? 'Șterge din salvate' : 'Salvează postarea'}
     >
       <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
     </button>

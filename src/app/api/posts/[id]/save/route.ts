@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma/client';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
-import { AuthenticationError, AuthorizationError, NotFoundError } from '@/lib/errors';
+import { AuthenticationError, AuthorizationError, NotFoundError, RateLimitError } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
 import { validateOrigin } from '@/lib/csrf';
+import { saveRateLimit } from '@/lib/rate-limit';
 
 /**
  * GET /api/posts/[id]/save - Check if post is saved by current user
@@ -61,6 +62,14 @@ export async function POST(
 
     if (!user) {
       throw new AuthenticationError();
+    }
+
+    // Check rate limit
+    if (saveRateLimit) {
+      const { success } = await saveRateLimit.limit(user.id);
+      if (!success) {
+        throw new RateLimitError('Ai atins limita de salvări. Încearcă din nou mai târziu.');
+      }
     }
 
     // Check if post exists
@@ -122,6 +131,14 @@ export async function DELETE(
 
     if (!user) {
       throw new AuthenticationError();
+    }
+
+    // Check rate limit
+    if (saveRateLimit) {
+      const { success } = await saveRateLimit.limit(user.id);
+      if (!success) {
+        throw new RateLimitError('Ai atins limita de salvări. Încearcă din nou mai târziu.');
+      }
     }
 
     // Delete the saved post (if exists)

@@ -78,7 +78,11 @@ export async function GET(
           take: 4,
         },
         _count: {
-          select: { comments: true },
+          select: {
+            comments: {
+              where: { status: 'active' },
+            },
+          },
         },
       },
     });

@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma/client';
 import { searchQuerySchema } from '@/lib/validations/post';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
-import { NotFoundError } from '@/lib/errors';
+import { NotFoundError, RateLimitError } from '@/lib/errors';
+import { searchRateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
  * GET /api/search - Search posts in a neighborhood
@@ -10,6 +11,15 @@ import { NotFoundError } from '@/lib/errors';
  */
 export async function GET(request: NextRequest) {
   try {
+    // Check rate limit (IP-based since search is public)
+    if (searchRateLimit) {
+      const identifier = getClientIp(request);
+      const { success } = await searchRateLimit.limit(identifier);
+      if (!success) {
+        throw new RateLimitError('Ai atins limita de căutări. Încearcă din nou mai târziu.');
+      }
+    }
+
     const { searchParams } = new URL(request.url);
 
     // Parse and validate query parameters
@@ -75,7 +85,11 @@ export async function GET(request: NextRequest) {
           take: 4,
         },
         _count: {
-          select: { comments: true },
+          select: {
+            comments: {
+              where: { status: 'active' },
+            },
+          },
         },
       },
     });

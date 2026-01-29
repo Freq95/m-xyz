@@ -77,7 +77,11 @@ export async function GET(request: NextRequest) {
               take: 4,
             },
             _count: {
-              select: { comments: true },
+              select: {
+                comments: {
+                  where: { status: 'active' },
+                },
+              },
             },
           },
         },

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button, Input, Textarea } from '@/components/ui';
 import { createPostSchema, type PostCategory, IMAGE_VALIDATION } from '@/lib/validations/post';
 import { AlertTriangle, ShoppingBag, HelpCircle, Calendar, Search, Tag, Image as ImageIcon, X } from 'lucide-react';
+import { useToast } from '@/components/shared';
 
 const categories: { value: PostCategory; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'ALERT', label: 'Alertă', icon: <AlertTriangle className="w-4 h-4" />, color: 'bg-destructive/10 text-destructive border-destructive/20' },
@@ -22,6 +23,7 @@ interface PostFormProps {
 
 export function PostForm({ onSuccess }: PostFormProps) {
   const router = useRouter();
+  const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -150,7 +152,9 @@ export function PostForm({ onSuccess }: PostFormProps) {
         return;
       }
 
-      // Success - redirect to feed or call callback
+      // Success - show toast and redirect to feed or call callback
+      toast.success('Postarea a fost creată cu succes');
+
       if (onSuccess) {
         onSuccess();
       } else {

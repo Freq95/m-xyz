@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     const query = postQuerySchema.parse({
       neighborhood: searchParams.get('neighborhood'),
       category: searchParams.get('category') || undefined,
+      filter: searchParams.get('filter') || undefined,
       cursor: searchParams.get('cursor') || undefined,
       limit: searchParams.get('limit') || 20,
     });
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
       ? CACHE_KEYS.FEED({
           neighborhoodSlug: query.neighborhood,
           categorySlug: query.category,
+          filterSlug: query.filter,
         })
       : null;
 
@@ -74,6 +76,10 @@ export async function GET(request: NextRequest) {
         neighborhoodId: neighborhood.id,
         status: 'active',
         ...(query.category && { category: query.category }),
+        ...(query.filter === 'gratuit' && {
+          category: 'SELL',
+          isFree: true,
+        }),
         ...cursorCondition,
       },
       orderBy: [
@@ -95,7 +101,11 @@ export async function GET(request: NextRequest) {
           take: 4, // Max 4 images per post preview
         },
         _count: {
-          select: { comments: true },
+          select: {
+            comments: {
+              where: { status: 'active' },
+            },
+          },
         },
       },
     });

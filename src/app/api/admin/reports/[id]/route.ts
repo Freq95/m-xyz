@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
-import { NotFoundError, ValidationError } from '@/lib/errors';
+import { NotFoundError, ValidationError, RateLimitError } from '@/lib/errors';
 import { getAdminUser } from '@/lib/auth';
 import { validateOrigin } from '@/lib/csrf';
 import {
@@ -8,6 +8,7 @@ import {
   resolveReport,
   dismissReport,
 } from '@/lib/services/admin.service';
+import { adminRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
 
 const updateReportSchema = z.object({
@@ -24,7 +25,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await getAdminUser();
+    const user = await getAdminUser();
+
+    // Check rate limit
+    if (adminRateLimit) {
+      const { success } = await adminRateLimit.limit(user.id);
+      if (!success) {
+        throw new RateLimitError('Ai atins limita de cereri. Încearcă din nou mai târziu.');
+      }
+    }
 
     const { id } = await params;
     const report = await getReportWithTarget(id);
@@ -52,6 +61,15 @@ export async function PATCH(
     }
 
     const admin = await getAdminUser();
+
+    // Check rate limit
+    if (adminRateLimit) {
+      const { success } = await adminRateLimit.limit(admin.id);
+      if (!success) {
+        throw new RateLimitError('Ai atins limita de cereri. Încearcă din nou mai târziu.');
+      }
+    }
+
     const { id } = await params;
 
     const body = await request.json();

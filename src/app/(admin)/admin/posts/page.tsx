@@ -184,7 +184,7 @@ export default function AdminPostsPage() {
                       <Avatar
                         src={post.author.avatarUrl}
                         fallback={post.author.displayName || post.author.fullName}
-                        size="xs"
+                        size="sm"
                       />
                       <span>{post.author.displayName || post.author.fullName}</span>
                     </div>

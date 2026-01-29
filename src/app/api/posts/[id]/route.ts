@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/server';
 import { updatePostSchema } from '@/lib/validations/post';
 import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
+import { invalidateFeedCache } from '@/lib/redis/client';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -44,7 +45,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
           orderBy: { position: 'asc' },
         },
         _count: {
-          select: { comments: true },
+          select: {
+            comments: {
+              where: { status: 'active' },
+            },
+          },
         },
       },
     });
@@ -168,6 +173,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       },
     });
 
+    // Invalidate feed cache since post was updated
+    await invalidateFeedCache();
+
     return successResponse({
       id: updatedPost.id,
       title: updatedPost.title,
@@ -235,6 +243,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       where: { id },
       data: { status: 'deleted' },
     });
+
+    // Invalidate feed cache since post was deleted
+    await invalidateFeedCache();
 
     return successResponse({ deleted: true });
   } catch (error) {

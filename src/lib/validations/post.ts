@@ -18,6 +18,8 @@ export const postCategoryEnum = z.enum([
   'LOST_FOUND',
 ]);
 
+export const postFilterEnum = z.enum(['gratuit']);
+
 export const createPostSchema = z.object({
   title: z.string().max(200, 'Titlul nu poate depăși 200 de caractere').optional(),
   body: z
@@ -41,6 +43,7 @@ export const updatePostSchema = createPostSchema.partial().extend({
 export const postQuerySchema = z.object({
   neighborhood: z.string().min(1),
   category: postCategoryEnum.optional(),
+  filter: postFilterEnum.optional(),
   cursor: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -54,6 +57,7 @@ export const searchQuerySchema = z.object({
 });
 
 export type PostCategory = z.infer<typeof postCategoryEnum>;
+export type PostFilter = z.infer<typeof postFilterEnum>;
 export type CreatePostInput = z.infer<typeof createPostSchema>;
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 export type PostQueryInput = z.infer<typeof postQuerySchema>;

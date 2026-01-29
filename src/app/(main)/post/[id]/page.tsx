@@ -20,6 +20,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { Button, Card, Avatar, Textarea, Skeleton } from '@/components/ui';
+import { ConfirmModal, useToast } from '@/components/shared';
 import type { PostCategory } from '@/lib/validations/post';
 
 interface Post {
@@ -130,6 +131,12 @@ export default function PostDetailPage() {
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
   const [isTogglingSold, setIsTogglingSold] = useState(false);
+  const [deleteCommentId, setDeleteCommentId] = useState<string | null>(null);
+  const [showDeletePostModal, setShowDeletePostModal] = useState(false);
+  const [isDeletingComment, setIsDeletingComment] = useState(false);
+  const [isDeletingPost, setIsDeletingPost] = useState(false);
+
+  const { showToast } = useToast();
 
   // Fetch current user
   useEffect(() => {
@@ -238,18 +245,24 @@ export default function PostDetailPage() {
         setPost({ ...post, commentCount: post.commentCount + 1 });
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'A apărut o eroare');
+      showToast('error', err instanceof Error ? err.message : 'A apărut o eroare');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Delete comment
-  const handleDeleteComment = async (commentId: string) => {
-    if (!confirm('Sigur vrei să ștergi acest comentariu?')) return;
+  // Delete comment - open confirmation modal
+  const handleDeleteComment = (commentId: string) => {
+    setDeleteCommentId(commentId);
+  };
 
+  // Confirm delete comment
+  const confirmDeleteComment = async () => {
+    if (!deleteCommentId) return;
+
+    setIsDeletingComment(true);
     try {
-      const response = await fetch(`/api/comments/${commentId}`, {
+      const response = await fetch(`/api/comments/${deleteCommentId}`, {
         method: 'DELETE',
       });
 
@@ -265,15 +278,24 @@ export default function PostDetailPage() {
       if (post) {
         setPost({ ...post, commentCount: post.commentCount - 1 });
       }
+
+      setDeleteCommentId(null);
+      showToast('success', 'Comentariul a fost șters');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'A apărut o eroare');
+      showToast('error', err instanceof Error ? err.message : 'A apărut o eroare');
+    } finally {
+      setIsDeletingComment(false);
     }
   };
 
-  // Delete post
-  const handleDeletePost = async () => {
-    if (!confirm('Sigur vrei să ștergi această postare?')) return;
+  // Delete post - open confirmation modal
+  const handleDeletePost = () => {
+    setShowDeletePostModal(true);
+  };
 
+  // Confirm delete post
+  const confirmDeletePost = async () => {
+    setIsDeletingPost(true);
     try {
       const response = await fetch(`/api/posts/${postId}`, {
         method: 'DELETE',
@@ -284,9 +306,11 @@ export default function PostDetailPage() {
         throw new Error(result.error || 'Nu s-a putut șterge postarea');
       }
 
+      showToast('success', 'Postarea a fost ștearsă');
       router.push('/feed');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'A apărut o eroare');
+      showToast('error', err instanceof Error ? err.message : 'A apărut o eroare');
+      setIsDeletingPost(false);
     }
   };
 
@@ -379,13 +403,14 @@ export default function PostDetailPage() {
             : null
         );
         setShowEditModal(false);
+        showToast('success', 'Postarea a fost actualizată');
       } else {
         const result = await response.json();
-        alert(result.error || 'Nu s-a putut actualiza postarea');
+        showToast('error', result.error || 'Nu s-a putut actualiza postarea');
       }
     } catch (err) {
       console.error('Failed to edit:', err);
-      alert('A apărut o eroare');
+      showToast('error', 'A apărut o eroare');
     } finally {
       setIsEditing(false);
     }
@@ -443,28 +468,46 @@ export default function PostDetailPage() {
         setPost((prev) =>
           prev ? { ...prev, status: result.data.status } : null
         );
+        showToast('success', result.data.status === 'sold' ? 'Postarea a fost marcată ca vândută' : 'Postarea a fost reactivată');
       } else {
         const result = await response.json();
-        alert(result.error || 'Nu s-a putut actualiza statusul');
+        showToast('error', result.error || 'Nu s-a putut actualiza statusul');
       }
     } catch (err) {
       console.error('Failed to toggle sold:', err);
-      alert('A apărut o eroare');
+      showToast('error', 'A apărut o eroare');
     } finally {
       setIsTogglingSold(false);
     }
   };
 
+  // Escape key handlers for modals
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showReportModal && !isReporting) {
+          setShowReportModal(false);
+          setReportReason('');
+        } else if (showEditModal && !isEditing) {
+          setShowEditModal(false);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [showReportModal, showEditModal, isReporting, isEditing]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-50 bg-background border-b border-border">
-          <div className="mx-auto max-w-2xl px-4 py-3 flex items-center gap-3">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
             <Skeleton className="w-8 h-8 rounded-full" />
             <Skeleton className="h-5 w-32" />
           </div>
         </header>
-        <main className="mx-auto max-w-2xl px-4 py-4">
+        <main className="mx-auto max-w-4xl px-4 py-4">
           <Card className="p-4">
             <div className="flex items-start gap-3">
               <Skeleton className="w-10 h-10 rounded-full" />
@@ -484,7 +527,7 @@ export default function PostDetailPage() {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-50 bg-background border-b border-border">
-          <div className="mx-auto max-w-2xl px-4 py-3 flex items-center gap-3">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
             <Link href="/feed">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-5 h-5" />
@@ -493,7 +536,7 @@ export default function PostDetailPage() {
             <span className="font-semibold">Postare</span>
           </div>
         </header>
-        <main className="mx-auto max-w-2xl px-4 py-12 text-center">
+        <main className="mx-auto max-w-4xl px-4 py-12 text-center">
           <p className="text-destructive mb-4">{error || 'Postarea nu a fost găsită'}</p>
           <Link href="/feed">
             <Button>Înapoi la feed</Button>
@@ -516,7 +559,7 @@ export default function PostDetailPage() {
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background border-b border-border">
-        <div className="mx-auto max-w-2xl px-4 py-3 flex items-center justify-between">
+        <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/feed">
               <Button variant="ghost" size="sm">
@@ -526,20 +569,41 @@ export default function PostDetailPage() {
             <span className="font-semibold">Postare</span>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={handleShare} title={copied ? 'Link copiat!' : 'Distribuie'}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleShare}
+              title={copied ? 'Link copiat!' : 'Distribuie'}
+              aria-label={copied ? 'Link copiat' : 'Distribuie postarea'}
+            >
               {copied ? <Check className="w-5 h-5 text-green-600" /> : <Share2 className="w-5 h-5" />}
             </Button>
             {isAuthor ? (
               <>
-                <Button variant="ghost" size="sm" onClick={openEditModal}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={openEditModal}
+                  aria-label="Editează postarea"
+                >
                   <Edit className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={handleDeletePost}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDeletePost}
+                  aria-label="Șterge postarea"
+                >
                   <Trash2 className="w-5 h-5 text-destructive" />
                 </Button>
               </>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => setShowReportModal(true)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowReportModal(true)}
+                aria-label="Raportează postarea"
+              >
                 <Flag className="w-5 h-5" />
               </Button>
             )}
@@ -548,7 +612,7 @@ export default function PostDetailPage() {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-2xl px-4 py-4">
+      <main className="mx-auto max-w-4xl px-4 py-4">
         {/* Post */}
         <Card className={`p-4 mb-4 ${post.isPinned ? 'border-primary/50 bg-primary/5' : ''}`}>
           <div className="flex items-start gap-3">
@@ -777,7 +841,7 @@ export default function PostDetailPage() {
                           <Avatar
                             fallback={user.displayName || user.fullName}
                             src={user.avatarUrl}
-                            size="xs"
+                            size="sm"
                           />
                           <div className="flex-1">
                             <Textarea
@@ -819,7 +883,7 @@ export default function PostDetailPage() {
                               <Avatar
                                 fallback={reply.author.name}
                                 src={reply.author.avatarUrl}
-                                size="xs"
+                                size="sm"
                               />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
@@ -944,6 +1008,30 @@ export default function PostDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Comment Modal */}
+      <ConfirmModal
+        isOpen={deleteCommentId !== null}
+        onClose={() => setDeleteCommentId(null)}
+        onConfirm={confirmDeleteComment}
+        title="Șterge comentariul"
+        message="Sigur vrei să ștergi acest comentariu? Această acțiune nu poate fi anulată."
+        confirmText="Șterge"
+        confirmVariant="destructive"
+        isLoading={isDeletingComment}
+      />
+
+      {/* Delete Post Modal */}
+      <ConfirmModal
+        isOpen={showDeletePostModal}
+        onClose={() => setShowDeletePostModal(false)}
+        onConfirm={confirmDeletePost}
+        title="Șterge postarea"
+        message="Sigur vrei să ștergi această postare? Această acțiune nu poate fi anulată."
+        confirmText="Șterge"
+        confirmVariant="destructive"
+        isLoading={isDeletingPost}
+      />
     </div>
   );
 }

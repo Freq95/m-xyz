@@ -65,14 +65,14 @@ export default function NotificationsPage() {
         const result = await response.json();
 
         if (reset) {
-          setNotifications(result.data || []);
+          setNotifications(result.data?.notifications || []);
         } else {
-          setNotifications((prev) => [...prev, ...(result.data || [])]);
+          setNotifications((prev) => [...prev, ...(result.data?.notifications || [])]);
         }
 
         setCursor(result.meta?.cursor);
         setHasMore(result.meta?.hasMore || false);
-        setUnreadCount(result.meta?.unreadCount ?? 0);
+        setUnreadCount(result.data?.unreadCount ?? 0);
       }
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
@@ -140,14 +140,14 @@ export default function NotificationsPage() {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-50 bg-background border-b border-border">
-          <div className="mx-auto max-w-2xl px-4 py-3 flex items-center gap-3">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => router.back()}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <h1 className="font-semibold">Notificări</h1>
           </div>
         </header>
-        <main className="mx-auto max-w-2xl px-4 py-4">
+        <main className="mx-auto max-w-4xl px-4 py-4">
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (
               <Card key={i} className="p-4 animate-pulse">
@@ -170,7 +170,7 @@ export default function NotificationsPage() {
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background border-b border-border">
-        <div className="mx-auto max-w-2xl px-4 py-3 flex items-center justify-between">
+        <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => router.back()}>
               <ArrowLeft className="w-5 h-5" />
@@ -192,7 +192,7 @@ export default function NotificationsPage() {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-2xl px-4 py-4">
+      <main className="mx-auto max-w-4xl px-4 py-4">
         {notifications.length === 0 ? (
           <div className="text-center py-16">
             <Bell className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />

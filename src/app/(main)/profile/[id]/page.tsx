@@ -224,12 +224,12 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-50 bg-background border-b border-border">
-          <div className="mx-auto max-w-2xl px-4 py-3 flex items-center gap-3">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
             <Skeleton className="w-8 h-8 rounded-full" />
             <Skeleton className="h-5 w-32" />
           </div>
         </header>
-        <main className="mx-auto max-w-2xl px-4 py-4">
+        <main className="mx-auto max-w-4xl px-4 py-4">
           <Card className="p-6">
             <div className="flex items-center gap-4">
               <Skeleton className="w-20 h-20 rounded-full" />
@@ -248,7 +248,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-50 bg-background border-b border-border">
-          <div className="mx-auto max-w-2xl px-4 py-3 flex items-center gap-3">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
             <Link href="/feed">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-5 h-5" />
@@ -257,7 +257,7 @@ export default function ProfilePage() {
             <span className="font-semibold">Profil</span>
           </div>
         </header>
-        <main className="mx-auto max-w-2xl px-4 py-12 text-center">
+        <main className="mx-auto max-w-4xl px-4 py-12 text-center">
           <p className="text-destructive mb-4">{error || 'Profilul nu a fost găsit'}</p>
           <Link href="/feed">
             <Button>Înapoi la feed</Button>
@@ -276,7 +276,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-background pb-8">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background border-b border-border">
-        <div className="mx-auto max-w-2xl px-4 py-3 flex items-center justify-between">
+        <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/feed">
               <Button variant="ghost" size="sm">
@@ -293,7 +293,7 @@ export default function ProfilePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-4">
+      <main className="mx-auto max-w-4xl px-4 py-4">
         {/* Profile Card */}
         <Card className="p-6 mb-6">
           <div className="flex items-start gap-4">

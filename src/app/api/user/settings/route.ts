@@ -116,7 +116,7 @@ export async function PATCH(request: NextRequest) {
         throw new ValidationError('Cartierul selectat nu există');
       }
 
-      if (neighborhood.status !== 'active') {
+      if (!neighborhood.isActive) {
         throw new ValidationError('Cartierul selectat nu este disponibil');
       }
 

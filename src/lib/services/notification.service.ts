@@ -23,7 +23,7 @@ export async function createNotification(params: CreateNotificationParams) {
       type,
       title,
       body: body || null,
-      data: data || null,
+      data: (data || null) as any,
     },
   });
 
@@ -44,6 +44,20 @@ export async function notifyPostComment(params: {
 
   // Don't notify if commenting on own post
   if (postAuthorId === commenterId) {
+    return null;
+  }
+
+  // Check user's notification preferences
+  const user = await prisma.user.findUnique({
+    where: { id: postAuthorId },
+    select: { notificationPreferences: true },
+  });
+
+  // Parse notification preferences (stored as JSON)
+  const prefs = user?.notificationPreferences as { email_comments?: boolean } | null;
+
+  // Don't create notification if user has disabled comment notifications
+  if (prefs && prefs.email_comments === false) {
     return null;
   }
 
@@ -75,6 +89,20 @@ export async function notifyCommentReply(params: {
 
   // Don't notify if replying to own comment
   if (commentAuthorId === replierId) {
+    return null;
+  }
+
+  // Check user's notification preferences
+  const user = await prisma.user.findUnique({
+    where: { id: commentAuthorId },
+    select: { notificationPreferences: true },
+  });
+
+  // Parse notification preferences (stored as JSON)
+  const prefs = user?.notificationPreferences as { email_comments?: boolean } | null;
+
+  // Don't create notification if user has disabled comment notifications
+  if (prefs && prefs.email_comments === false) {
     return null;
   }
 

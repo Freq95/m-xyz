@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
-import { ValidationError } from '@/lib/errors';
+import { ValidationError, RateLimitError } from '@/lib/errors';
 import { getAdminUser } from '@/lib/auth';
 import { validateOrigin } from '@/lib/csrf';
 import { hidePost, unhidePost } from '@/lib/services/admin.service';
+import { adminRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
 
 const updatePostSchema = z.object({
@@ -24,6 +25,15 @@ export async function PATCH(
     }
 
     const admin = await getAdminUser();
+
+    // Check rate limit
+    if (adminRateLimit) {
+      const { success } = await adminRateLimit.limit(admin.id);
+      if (!success) {
+        throw new RateLimitError('Ai atins limita de cereri. Încearcă din nou mai târziu.');
+      }
+    }
+
     const { id } = await params;
 
     const body = await request.json();
