@@ -67,7 +67,6 @@ export function FeedClient({
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [isPrefetching, setIsPrefetching] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   // const parentRef = useRef<HTMLDivElement>(null);
 
@@ -86,52 +85,24 @@ export function FeedClient({
     setHasMore(initialHasMore);
   }, [initialPosts, initialCursor, initialHasMore]);
 
-  // Prefetch next page when user scrolls near "Load More" button
+  // Infinite scroll: Auto-load next page when user scrolls near bottom
   useEffect(() => {
     if (!hasMore || !cursor || !loadMoreRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
-        if (entry.isIntersecting && !isLoadingMore && !isPrefetching) {
-          prefetchNextPage();
+        if (entry.isIntersecting && !isLoadingMore) {
+          handleLoadMore(); // Auto-load instead of just prefetch
         }
       },
-      { rootMargin: '200px' } // Start prefetching 200px before button is visible
+      { rootMargin: '4000px' } // Start loading 4000px before reaching bottom
     );
 
     observer.observe(loadMoreRef.current);
 
     return () => observer.disconnect();
-  }, [hasMore, cursor, isLoadingMore, isPrefetching]);
-
-  const prefetchNextPage = async () => {
-    if (!cursor || isPrefetching) return;
-
-    setIsPrefetching(true);
-    try {
-      const params = new URLSearchParams({
-        neighborhood: neighborhoodSlug,
-        cursor,
-        limit: '20',
-      });
-
-      if (selectedCategory !== 'ALL') {
-        params.append('category', selectedCategory);
-      }
-
-      if (selectedFilter) {
-        params.append('filter', selectedFilter);
-      }
-
-      // Prefetch using fetch with low priority
-      fetch(`/api/posts?${params}`, { priority: 'low' as any });
-    } catch (err) {
-      // Silent fail for prefetch
-    } finally {
-      setIsPrefetching(false);
-    }
-  };
+  }, [hasMore, cursor, isLoadingMore]);
 
   const handleCategoryChange = (category: PostCategory | 'ALL' | 'GRATUIT') => {
     if (isPending) return; // Prevent double clicks
@@ -230,17 +201,15 @@ export function FeedClient({
             ))}
           </div>
 
-          {/* Load More Button */}
+          {/* Infinite scroll loading indicator */}
           {hasMore && (
-            <div ref={loadMoreRef} className="mt-6 text-center">
-              <Button
-                variant="outline"
-                onClick={handleLoadMore}
-                disabled={isLoadingMore}
-                isLoading={isLoadingMore}
-              >
-                {isLoadingMore ? 'Se încarcă...' : 'Mai multe postări'}
-              </Button>
+            <div ref={loadMoreRef} className="mt-6 text-center py-8">
+              {isLoadingMore && (
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">Se încarcă mai multe postări...</span>
+                </div>
+              )}
             </div>
           )}
         </>

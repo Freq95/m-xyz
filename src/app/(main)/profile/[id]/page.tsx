@@ -285,10 +285,17 @@ export default function ProfilePage() {
             </Link>
             <span className="font-semibold">Profil</span>
           </div>
-          {isOwnProfile && (
+          {isOwnProfile ? (
             <Button variant="outline" size="sm" onClick={openEditModal}>
               Editează
             </Button>
+          ) : (
+            <Link href={`/messages/new?userId=${profile.id}`}>
+              <Button variant="outline" size="sm">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Trimite mesaj
+              </Button>
+            </Link>
           )}
         </div>
       </header>

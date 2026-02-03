@@ -8,6 +8,7 @@ import { ro } from 'date-fns/locale';
 import {
   ArrowLeft,
   MessageCircle,
+  MessageSquare,
   Eye,
   Send,
   Trash2,
@@ -666,6 +667,18 @@ export default function PostDetailPage() {
                   ) : (
                     <span className={`text-sm text-muted-foreground ${isSold ? 'line-through' : ''}`}>Preț negociabil</span>
                   )}
+                </div>
+              )}
+
+              {/* Contact seller button (non-author, marketplace posts) */}
+              {isMarketplace && !isAuthor && (
+                <div className="mb-4">
+                  <Link href={`/messages/new?userId=${post.author.id}&postId=${post.id}`}>
+                    <Button variant="outline" size="sm">
+                      <MessageSquare className="w-4 h-4 mr-1" />
+                      Trimite mesaj
+                    </Button>
+                  </Link>
                 </div>
               )}
 

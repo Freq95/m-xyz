@@ -4,6 +4,7 @@ export const notificationTypeEnum = z.enum([
   'NEW_COMMENT',      // Someone commented on your post
   'COMMENT_REPLY',    // Someone replied to your comment
   'POST_SOLD',        // Your post was marked as sold (for buyers who saved it)
+  'NEW_MESSAGE',      // Someone sent you a direct message
 ]);
 
 export const notificationQuerySchema = z.object({

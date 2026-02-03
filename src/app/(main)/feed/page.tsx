@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { RefreshCw, Settings } from 'lucide-react';
+import { RefreshCw, Settings, MessageSquare } from 'lucide-react';
 import { Button, Card, Avatar } from '@/components/ui';
 import { FeedClient, FeedSkeleton, NoNeighborhoodState } from '@/components/feed';
 import { NotificationBell } from '@/components/layout';
@@ -11,7 +11,7 @@ import { redis, CACHE_KEYS, CACHE_TTL } from '@/lib/redis/client';
 import type { PostCategory } from '@/lib/validations/post';
 
 interface PageProps {
-  searchParams: { category?: string; filter?: string };
+  searchParams: Promise<{ category?: string; filter?: string }>;
 }
 
 async function getUserData(userId: string) {
@@ -162,8 +162,11 @@ export default async function FeedPage({ searchParams }: PageProps) {
       redirect('/login');
     }
 
-    const category = searchParams.category;
-    const filter = searchParams.filter;
+    const params = await searchParams;
+    const category = params.category;
+    const filter = params.filter;
+
+    console.log('🔍 [FEED PAGE] Received params:', { category, filter });
 
     return (
       <div className="min-h-screen bg-background">
@@ -188,6 +191,11 @@ export default async function FeedPage({ searchParams }: PageProps) {
                 </Button>
               </form>
               <NotificationBell />
+              <Link href="/messages">
+                <Button variant="ghost" size="sm" aria-label="Mesaje">
+                  <MessageSquare className="w-5 h-5" />
+                </Button>
+              </Link>
               <Link href="/settings">
                 <Button variant="ghost" size="sm" aria-label="Deschide setările">
                   <Settings className="w-5 h-5" />

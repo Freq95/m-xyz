@@ -52,6 +52,10 @@ model User {
   notifications Notification[]
   savedPosts    SavedPost[]
   auditLogs     AuditLog[]
+  conversationsAsUser1 Conversation[]   @relation("ConversationUser1")
+  conversationsAsUser2 Conversation[]   @relation("ConversationUser2")
+  sentMessages         DirectMessage[]  @relation("SentMessages")
+  receivedMessages     DirectMessage[]  @relation("ReceivedMessages")
 
   @@index([email])
   @@index([neighborhoodId])
@@ -241,6 +245,46 @@ model SavedPost {
   @@unique([userId, postId])
   @@index([userId, createdAt(sort: Desc)])
   @@map("saved_posts")
+}
+
+// ============================================
+// DIRECT MESSAGES
+// ============================================
+model Conversation {
+  id            String          @id @default(uuid())
+  userId1       String          @map("user_id_1")
+  user1         User            @relation("ConversationUser1", fields: [userId1], references: [id], onDelete: Cascade)
+  userId2       String          @map("user_id_2")
+  user2         User            @relation("ConversationUser2", fields: [userId2], references: [id], onDelete: Cascade)
+
+  lastMessageAt DateTime        @default(now()) @map("last_message_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  messages      DirectMessage[]
+
+  @@unique([userId1, userId2])
+  @@index([userId1, lastMessageAt(sort: Desc)])
+  @@index([userId2, lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model DirectMessage {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String       @map("sender_id")
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+  recipientId    String       @map("recipient_id")
+  recipient      User         @relation("ReceivedMessages", fields: [recipientId], references: [id])
+
+  body      String
+  isRead    Boolean   @default(false) @map("is_read")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([recipientId, isRead])
+  @@map("direct_messages")
 }
 
 // ============================================

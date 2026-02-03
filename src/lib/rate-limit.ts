@@ -93,6 +93,16 @@ export const searchRateLimit = redis && Ratelimit
     })
   : null;
 
+// Message rate limiter: 100 messages per hour
+export const messageRateLimit = redis && Ratelimit
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(100, '1 h'),
+      analytics: true,
+      prefix: 'ratelimit:message',
+    })
+  : null;
+
 /**
  * Get client IP address from request
  */
