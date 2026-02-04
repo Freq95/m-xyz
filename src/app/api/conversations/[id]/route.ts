@@ -2,7 +2,10 @@ import { NextRequest } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import prisma from '@/lib/prisma/client';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
-import { NotFoundError, AuthorizationError } from '@/lib/errors';
+import { NotFoundError, AuthorizationError, RateLimitError } from '@/lib/errors';
+import { messageQuerySchema } from '@/lib/validations/message';
+import { readRateLimit } from '@/lib/rate-limit';
+import { redis } from '@/lib/redis/client';
 
 export async function GET(
   request: NextRequest,
@@ -10,10 +13,24 @@ export async function GET(
 ) {
   try {
     const user = await getAuthUser();
+
+    // Rate limiting
+    if (readRateLimit) {
+      const { success } = await readRateLimit.limit(user.id);
+      if (!success) {
+        throw new RateLimitError('Prea multe cereri. Încearcă din nou mai târziu.');
+      }
+    }
+
     const conversationId = params.id;
     const { searchParams } = new URL(request.url);
-    const cursor = searchParams.get('cursor') || undefined;
-    const limit = parseInt(searchParams.get('limit') || '30');
+
+    // Validate query parameters with Zod schema
+    const query = messageQuerySchema.parse({
+      conversationId,
+      cursor: searchParams.get('cursor') || undefined,
+      limit: searchParams.get('limit') || 30,
+    });
 
     // Check conversation exists and user is participant
     const conversation = await prisma.conversation.findUnique({
@@ -31,9 +48,9 @@ export async function GET(
 
     // Build cursor pagination (DESC order - newest first)
     let cursorCondition = {};
-    if (cursor) {
+    if (query.cursor) {
       const cursorMsg = await prisma.directMessage.findUnique({
-        where: { id: cursor },
+        where: { id: query.cursor },
         select: { createdAt: true },
       });
       if (cursorMsg?.createdAt) {
@@ -48,16 +65,16 @@ export async function GET(
         ...cursorCondition,
       },
       orderBy: { createdAt: 'desc' },
-      take: limit + 1,
+      take: query.limit + 1,
       include: {
         sender: {
-          select: { id: true, displayName: true, fullName: true, avatarUrl: true },
+          select: { id: true, displayName: true, username: true, fullName: true, avatarUrl: true },
         },
       },
     });
 
     // Check pagination
-    const hasMore = messages.length > limit;
+    const hasMore = messages.length > query.limit;
     const messagesToReturn = hasMore ? messages.slice(0, -1) : messages;
     const nextCursor = hasMore ? messagesToReturn[messagesToReturn.length - 1]?.id : undefined;
 
@@ -71,22 +88,42 @@ export async function GET(
       sender: {
         id: msg.sender.id,
         name: msg.sender.displayName || msg.sender.fullName,
+        username: msg.sender.username,
         avatarUrl: msg.sender.avatarUrl,
       },
     }));
 
-    // Mark messages as read (fire-and-forget)
-    prisma.directMessage.updateMany({
-      where: {
-        conversationId,
-        recipientId: user.id,
-        isRead: false,
-      },
-      data: {
-        isRead: true,
-        readAt: new Date(),
-      },
-    }).catch((err: any) => console.error('Failed to mark messages as read:', err));
+    // Mark messages as read with retry logic (non-blocking)
+    const markAsRead = async (retries = 3) => {
+      try {
+        await prisma.directMessage.updateMany({
+          where: {
+            conversationId,
+            recipientId: user.id,
+            isRead: false,
+          },
+          data: {
+            isRead: true,
+            readAt: new Date(),
+          },
+        });
+
+        // Invalidate unread count cache on success
+        if (redis) {
+          await redis.del(`unread:${user.id}`);
+        }
+      } catch (err: any) {
+        if (retries > 0) {
+          // Exponential backoff: 100ms, 200ms, 400ms
+          const delay = 100 * Math.pow(2, 3 - retries);
+          setTimeout(() => markAsRead(retries - 1), delay);
+        } else {
+          console.error('Failed to mark messages as read after 3 retries:', err);
+        }
+      }
+    };
+
+    markAsRead();
 
     return successResponse(formatted, { cursor: nextCursor, hasMore });
   } catch (error) {

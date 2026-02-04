@@ -4,9 +4,11 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Home, Plus, Bookmark, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { getProfileUrl } from '@/lib/utils/profile';
 
 interface User {
   id: string;
+  username?: string | null;
 }
 
 export function BottomNav() {
@@ -68,7 +70,7 @@ export function BottomNav() {
           {/* Create Post */}
           <Link
             href="/post/new"
-            className="flex items-center justify-center w-12 h-12 -mt-6 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-shadow"
+            className="flex items-center justify-center w-12 h-12 -mt-1 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-shadow"
             aria-label="Creează postare nouă"
           >
             <Plus className="w-6 h-6" />
@@ -90,7 +92,7 @@ export function BottomNav() {
 
           {/* Profile */}
           <Link
-            href={user ? `/profile/${user.id}` : '/login'}
+            href={user ? getProfileUrl(user) : '/login'}
             className={`flex flex-col items-center gap-1 px-4 py-2 transition-colors ${
               pathname?.startsWith('/profile')
                 ? 'text-primary'

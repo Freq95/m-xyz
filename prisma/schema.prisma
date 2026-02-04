@@ -19,6 +19,7 @@ model User {
   // Profile
   fullName    String  @map("full_name")
   displayName String? @map("display_name")
+  username    String? @unique
   avatarUrl   String? @map("avatar_url")
   bio         String?
 
@@ -58,6 +59,7 @@ model User {
   receivedMessages     DirectMessage[]  @relation("ReceivedMessages")
 
   @@index([email])
+  @@index([username])
   @@index([neighborhoodId])
   @@map("users")
 }

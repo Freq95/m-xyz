@@ -20,6 +20,8 @@ export async function GET() {
       where: { id: authUser.id },
       select: {
         displayName: true,
+        username: true,
+        avatarUrl: true,
         bio: true,
         email: true,
         notificationPreferences: true,
@@ -51,6 +53,8 @@ export async function GET() {
 
     return successResponse({
       displayName: user.displayName,
+      username: user.username,
+      avatarUrl: user.avatarUrl,
       bio: user.bio,
       email: user.email,
       notificationPreferences,
@@ -88,6 +92,31 @@ export async function PATCH(request: NextRequest) {
       updateData.displayName = validatedData.displayName
         ? sanitizeText(validatedData.displayName)
         : null;
+    }
+
+    // Validate and update username
+    if (validatedData.username !== undefined) {
+      // Check if username is already taken by another user
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          username: validatedData.username,
+          NOT: {
+            id: authUser.id,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (existingUser) {
+        throw new ValidationError('Acest username este deja folosit');
+      }
+
+      updateData.username = validatedData.username;
+    }
+
+    // Update avatarUrl
+    if (validatedData.avatarUrl !== undefined) {
+      updateData.avatarUrl = validatedData.avatarUrl || null;
     }
 
     if (validatedData.bio !== undefined) {
@@ -129,6 +158,8 @@ export async function PATCH(request: NextRequest) {
       data: updateData,
       select: {
         displayName: true,
+        username: true,
+        avatarUrl: true,
         bio: true,
         email: true,
         notificationPreferences: true,
@@ -145,6 +176,8 @@ export async function PATCH(request: NextRequest) {
 
     return successResponse({
       displayName: updatedUser.displayName,
+      username: updatedUser.username,
+      avatarUrl: updatedUser.avatarUrl,
       bio: updatedUser.bio,
       email: updatedUser.email,
       notificationPreferences: updatedUser.notificationPreferences,

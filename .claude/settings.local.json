@@ -57,7 +57,10 @@
       "Bash(D:)",
       "Bash(npm --prefix \"d:/m-vecinu-xyz\" run build)",
       "Bash(timeout /t 3)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Bash(timeout:*)",
+      "Bash(node scripts/migrate-username.js:*)"
     ]
   }
 }

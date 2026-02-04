@@ -103,6 +103,16 @@ export const messageRateLimit = redis && Ratelimit
     })
   : null;
 
+// Read operations rate limiter: 300 reads per minute
+export const readRateLimit = redis && Ratelimit
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(300, '1 m'),
+      analytics: true,
+      prefix: 'ratelimit:read',
+    })
+  : null;
+
 /**
  * Get client IP address from request
  */

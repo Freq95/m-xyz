@@ -7,6 +7,7 @@ import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
 import { sendMessageSchema } from '@/lib/validations/message';
 import { messageRateLimit } from '@/lib/rate-limit';
+import { redis } from '@/lib/redis/client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,15 +35,30 @@ export async function POST(request: NextRequest) {
       throw new AuthorizationError('Nu te poți trimite mesaje singur');
     }
 
-    // Check recipient exists and is not banned
-    const recipient = await prisma.user.findUnique({
-      where: { id: validatedData.recipientId },
-      select: {
-        id: true,
-        isBanned: true,
-      },
-    });
+    // Sanitize message first (cheap operation)
+    const sanitizedBody = sanitizeText(validatedData.body);
+    if (sanitizedBody.length < 1) {
+      throw new AuthorizationError('Mesajul este prea scurt');
+    }
 
+    // Fetch all needed data in parallel (recipient check, sender info)
+    const [userId1, userId2] = [user.id, validatedData.recipientId].sort();
+
+    const [recipient, sender] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: validatedData.recipientId },
+        select: {
+          id: true,
+          isBanned: true,
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { id: true, displayName: true, fullName: true, avatarUrl: true },
+      }),
+    ]);
+
+    // Validate recipient
     if (!recipient) {
       throw new NotFoundError('Utilizatorul');
     }
@@ -51,52 +67,50 @@ export async function POST(request: NextRequest) {
       throw new AuthorizationError('Utilizatorul nu poate primi mesaje');
     }
 
-    // Sanitize message
-    const sanitizedBody = sanitizeText(validatedData.body);
-    if (sanitizedBody.length < 1) {
-      throw new AuthorizationError('Mesajul este prea scurt');
-    }
-
-    // Get or create conversation (ensure userId1 < userId2 for uniqueness)
-    const [userId1, userId2] = [user.id, validatedData.recipientId].sort();
-
-    let conversation = await prisma.conversation.findUnique({
-      where: {
-        userId1_userId2: { userId1, userId2 },
-      },
-    });
-
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: { userId1, userId2 },
-      });
-    }
-
-    // Get sender info for response
-    const sender = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { id: true, displayName: true, fullName: true, avatarUrl: true },
-    });
-
     if (!sender) {
       throw new NotFoundError('Utilizatorul');
     }
 
-    // Create message and update conversation lastMessageAt
-    const [message] = await prisma.$transaction([
-      prisma.directMessage.create({
+    // Create message and conversation in a single transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Use upsert for atomic get-or-create (prevents race condition)
+      const conversation = await tx.conversation.upsert({
+        where: {
+          userId1_userId2: { userId1, userId2 },
+        },
+        update: {
+          lastMessageAt: new Date(),
+        },
+        create: {
+          userId1,
+          userId2,
+          lastMessageAt: new Date(),
+        },
+      });
+
+      // Create message
+      const message = await tx.directMessage.create({
         data: {
           conversationId: conversation.id,
           senderId: user.id,
           recipientId: validatedData.recipientId,
           body: sanitizedBody,
         },
-      }),
-      prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { lastMessageAt: new Date() },
-      }),
-    ]);
+      });
+
+      return { message, conversation };
+    });
+
+    const { message, conversation } = result;
+
+    // Invalidate conversation list cache for both users
+    if (redis) {
+      await Promise.all([
+        redis.del(`conversations:${user.id}`),
+        redis.del(`conversations:${validatedData.recipientId}`),
+        redis.del(`unread:${validatedData.recipientId}`), // Invalidate recipient's unread count
+      ]);
+    }
 
     return successResponse({
       id: message.id,

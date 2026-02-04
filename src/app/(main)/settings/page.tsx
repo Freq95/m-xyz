@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Upload, X } from 'lucide-react';
 import Link from 'next/link';
-import { Button, Card, Input, Textarea } from '@/components/ui';
+import { Button, Card, Input, Textarea, Avatar } from '@/components/ui';
 import { useToast } from '@/components/shared/toast';
 
 interface NotificationPreferences {
@@ -15,6 +16,8 @@ interface NotificationPreferences {
 
 interface Settings {
   displayName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
   bio: string | null;
   email: string;
   notificationPreferences: NotificationPreferences;
@@ -28,10 +31,15 @@ interface Settings {
 
 export default function SettingsPage() {
   const toast = useToast();
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [initialSettings, setInitialSettings] = useState<Settings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
 
   // Track if settings have changed
   const hasChanges = useMemo(() => {
@@ -46,12 +54,8 @@ export default function SettingsPage() {
         const res = await fetch('/api/user/settings');
         if (res.ok) {
           const response = await res.json();
-          console.log('Settings API response:', response);
-
-          // Extract data from API response wrapper
           const data = response.data || response;
 
-          // Ensure notificationPreferences exists with defaults
           const settingsData = {
             ...data,
             notificationPreferences: data.notificationPreferences || {
@@ -62,12 +66,9 @@ export default function SettingsPage() {
             },
           };
 
-          console.log('Settings data after processing:', settingsData);
           setSettings(settingsData);
-          setInitialSettings(JSON.parse(JSON.stringify(settingsData))); // Deep clone
+          setInitialSettings(JSON.parse(JSON.stringify(settingsData)));
         } else {
-          const errorData = await res.json();
-          console.error('Settings API error:', errorData);
           toast.error('Nu s-au putut încărca setările');
         }
       } catch (err) {
@@ -80,9 +81,113 @@ export default function SettingsPage() {
     fetchSettings();
   }, [toast]);
 
+  // Check username availability
+  useEffect(() => {
+    if (!settings?.username || settings.username === initialSettings?.username) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCheckingUsername(true);
+      try {
+        const res = await fetch(`/api/user/username/check?username=${encodeURIComponent(settings.username || '')}`);
+        const data = await res.json();
+        setUsernameAvailable(data.available ?? false);
+      } catch {
+        setUsernameAvailable(null);
+      } finally {
+        setCheckingUsername(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [settings?.username, initialSettings?.username]);
+
+  // Handle avatar upload
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Imaginea este prea mare. Mărimea maximă este 5MB');
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Te rugăm să încarci o imagine');
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/user/avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSettings({
+          ...settings!,
+          avatarUrl: data.avatarUrl,
+        });
+        toast.success('Avatar încărcat cu succes');
+        // Refresh to update avatar everywhere
+        router.refresh();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Eroare la încărcarea avatarului');
+      }
+    } catch {
+      toast.error('Eroare de conexiune');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Handle avatar removal
+  const handleRemoveAvatar = async () => {
+    if (!settings?.avatarUrl) return;
+
+    try {
+      const res = await fetch('/api/user/avatar', {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        setSettings({
+          ...settings,
+          avatarUrl: null,
+        });
+        toast.success('Avatar șters cu succes');
+        // Refresh to update avatar everywhere
+        router.refresh();
+      } else {
+        toast.error('Eroare la ștergerea avatarului');
+      }
+    } catch {
+      toast.error('Eroare de conexiune');
+    }
+  };
+
   // Handle save
   const handleSave = async () => {
     if (!settings || !hasChanges) return;
+
+    // Validate username availability
+    if (settings.username !== initialSettings?.username && usernameAvailable === false) {
+      toast.error('Username-ul nu este disponibil');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -91,6 +196,7 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           displayName: settings.displayName,
+          username: settings.username,
           bio: settings.bio,
           notificationPreferences: settings.notificationPreferences,
         }),
@@ -100,8 +206,10 @@ export default function SettingsPage() {
         const response = await res.json();
         const updated = response.data || response;
         setSettings(updated);
-        setInitialSettings(JSON.parse(JSON.stringify(updated))); // Deep clone
+        setInitialSettings(JSON.parse(JSON.stringify(updated)));
         toast.success('Setările au fost actualizate cu succes');
+        // Refresh to update name/bio everywhere
+        router.refresh();
       } else {
         const data = await res.json();
         toast.error(data.error || 'Nu s-au putut salva setările');
@@ -162,7 +270,7 @@ export default function SettingsPage() {
           </div>
           <Button
             onClick={handleSave}
-            disabled={!hasChanges || isSaving}
+            disabled={!hasChanges || isSaving || (usernameAvailable === false)}
             isLoading={isSaving}
           >
             Salvează
@@ -174,6 +282,55 @@ export default function SettingsPage() {
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Profil</h2>
             <div className="space-y-4">
+              {/* Avatar Upload */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Poză de profil
+                </label>
+                <div className="flex items-center gap-4">
+                  <Avatar
+                    src={settings.avatarUrl || undefined}
+                    alt={settings.displayName || settings.email}
+                    size="lg"
+                    fallback={settings.displayName?.[0] || settings.email[0]}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      isLoading={isUploadingAvatar}
+                      disabled={isUploadingAvatar}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Încarcă
+                    </Button>
+                    {settings.avatarUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveAvatar}
+                        disabled={isUploadingAvatar}
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Șterge
+                      </Button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  JPG, PNG sau WebP. Maxim 5MB.
+                </p>
+              </div>
+
+              {/* Display Name */}
               <div>
                 <label className="text-sm font-medium mb-1 block">
                   Nume afișat
@@ -184,7 +341,6 @@ export default function SettingsPage() {
                     setSettings({
                       ...settings,
                       displayName: e.target.value,
-                      notificationPreferences: settings.notificationPreferences,
                     })
                   }
                   placeholder="Cum vrei să fii cunoscut"
@@ -195,6 +351,45 @@ export default function SettingsPage() {
                 </p>
               </div>
 
+              {/* Username */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">
+                  Username
+                </label>
+                <Input
+                  value={settings.username || ''}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      username: e.target.value.toLowerCase(),
+                    })
+                  }
+                  placeholder="username_unic"
+                  maxLength={30}
+                />
+                {checkingUsername && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Verifică disponibilitatea...
+                  </p>
+                )}
+                {!checkingUsername && usernameAvailable === true && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✓ Username disponibil
+                  </p>
+                )}
+                {!checkingUsername && usernameAvailable === false && (
+                  <p className="text-xs text-red-600 mt-1">
+                    ✗ Username deja folosit
+                  </p>
+                )}
+                {!checkingUsername && usernameAvailable === null && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Doar litere mici, cifre și underscore (min. 3 caractere)
+                  </p>
+                )}
+              </div>
+
+              {/* Bio */}
               <div>
                 <label className="text-sm font-medium mb-1 block">
                   Bio
@@ -205,7 +400,6 @@ export default function SettingsPage() {
                     setSettings({
                       ...settings,
                       bio: e.target.value,
-                      notificationPreferences: settings.notificationPreferences,
                     })
                   }
                   placeholder="Câteva cuvinte despre tine"
@@ -217,6 +411,7 @@ export default function SettingsPage() {
                 </p>
               </div>
 
+              {/* Email (read-only) */}
               <div>
                 <label className="text-sm font-medium mb-1 block text-muted-foreground">
                   Email

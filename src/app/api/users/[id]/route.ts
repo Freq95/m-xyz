@@ -4,7 +4,7 @@ import { handleApiError, successResponse } from '@/lib/errors/handler';
 import { NotFoundError } from '@/lib/errors';
 
 /**
- * GET /api/users/[id] - Get public user profile
+ * GET /api/users/[id] - Get public user profile by ID or username
  */
 export async function GET(
   request: NextRequest,
@@ -13,12 +13,16 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const user = await prisma.user.findUnique({
-      where: { id },
+    // Check if id is a UUID (old format) or username (new format)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    const user = await prisma.user.findFirst({
+      where: isUUID ? { id } : { username: id },
       select: {
         id: true,
         fullName: true,
         displayName: true,
+        username: true,
         avatarUrl: true,
         bio: true,
         createdAt: true,
@@ -49,6 +53,7 @@ export async function GET(
     return successResponse({
       id: user.id,
       name: user.displayName || user.fullName,
+      username: user.username,
       avatarUrl: user.avatarUrl,
       bio: user.bio,
       joinedAt: user.createdAt,

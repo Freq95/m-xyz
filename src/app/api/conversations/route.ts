@@ -3,15 +3,40 @@ import { getAuthUser } from '@/lib/auth';
 import prisma from '@/lib/prisma/client';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
 import { conversationQuerySchema } from '@/lib/validations/message';
+import { readRateLimit } from '@/lib/rate-limit';
+import { RateLimitError } from '@/lib/errors';
+import { redis } from '@/lib/redis/client';
 
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser();
+
+    // Rate limiting
+    if (readRateLimit) {
+      const { success } = await readRateLimit.limit(user.id);
+      if (!success) {
+        throw new RateLimitError('Prea multe cereri. Încearcă din nou mai târziu.');
+      }
+    }
+
     const { searchParams } = new URL(request.url);
     const query = conversationQuerySchema.parse({
       cursor: searchParams.get('cursor') || undefined,
       limit: searchParams.get('limit') || 20,
     });
+
+    // Check cache first (30s TTL, only for first page)
+    const shouldCache = !query.cursor && redis;
+    const cacheKey = shouldCache ? `conversations:${user.id}` : null;
+
+    if (cacheKey && redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        // Upstash Redis auto-deserializes JSON, so cached is already an object
+        const data = typeof cached === 'string' ? JSON.parse(cached) : cached;
+        return successResponse(data.data, data.meta);
+      }
+    }
 
     // Build cursor pagination
     let cursorCondition = {};
@@ -36,8 +61,8 @@ export async function GET(request: NextRequest) {
       orderBy: { lastMessageAt: 'desc' },
       take: query.limit + 1,
       include: {
-        user1: { select: { id: true, displayName: true, fullName: true, avatarUrl: true } },
-        user2: { select: { id: true, displayName: true, fullName: true, avatarUrl: true } },
+        user1: { select: { id: true, displayName: true, username: true, fullName: true, avatarUrl: true } },
+        user2: { select: { id: true, displayName: true, username: true, fullName: true, avatarUrl: true } },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1, // Last message preview
@@ -68,6 +93,7 @@ export async function GET(request: NextRequest) {
         otherUser: {
           id: otherUser.id,
           name: otherUser.displayName || otherUser.fullName,
+          username: otherUser.username,
           avatarUrl: otherUser.avatarUrl,
         },
         lastMessage: lastMessage ? {
@@ -79,6 +105,15 @@ export async function GET(request: NextRequest) {
         lastMessageAt: convo.lastMessageAt,
       };
     });
+
+    // Cache the result for 30 seconds (first page only)
+    if (cacheKey && redis) {
+      // Upstash Redis auto-serializes objects, no need for JSON.stringify
+      await redis.set(cacheKey, {
+        data: formatted,
+        meta: { cursor: nextCursor, hasMore },
+      }, { ex: 30 });
+    }
 
     return successResponse(formatted, { cursor: nextCursor, hasMore });
   } catch (error) {

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
 import { z } from 'zod';
+import { invalidateFeedCache } from '@/lib/redis/client';
 
 const updateProfileSchema = z.object({
   displayName: z.string().max(50, 'Numele nu poate depăși 50 de caractere').optional(),
@@ -61,6 +62,9 @@ export async function PATCH(request: NextRequest) {
         bio: true,
       },
     });
+
+    // Invalidate feed cache so posts show updated name
+    await invalidateFeedCache();
 
     return successResponse({
       id: updatedUser.id,

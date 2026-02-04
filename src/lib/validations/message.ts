@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const sendMessageSchema = z.object({
   recipientId: z.string().uuid('ID invalid'),
-  body: z.string().min(1, 'Mesajul nu poate fi gol').max(2000, 'Mesajul este prea lung'),
+  body: z.string().min(1, 'Mesajul nu poate fi gol').max(500, 'Mesajul este prea lung'),
 });
 
 export const messageQuerySchema = z.object({

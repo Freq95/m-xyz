@@ -22,6 +22,7 @@ export async function GET(_request: NextRequest) {
         email: true,
         fullName: true,
         displayName: true,
+        username: true,
         avatarUrl: true,
         bio: true,
         role: true,

@@ -171,7 +171,7 @@ export default function ProfilePage() {
     }
   };
 
-  const isOwnProfile = currentUser?.id === userId;
+  const isOwnProfile = currentUser?.id === profile?.id;
 
   // Open edit modal
   const openEditModal = () => {

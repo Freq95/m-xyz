@@ -2,6 +2,7 @@ import { createClient } from './server';
 import { IMAGE_VALIDATION } from '@/lib/validations/post';
 
 const BUCKET_NAME = 'post-images';
+const AVATARS_BUCKET = 'avatars';
 
 interface UploadResult {
   url: string;
@@ -142,4 +143,89 @@ export async function deletePostImage(url: string): Promise<void> {
  */
 export async function deletePostImages(urls: string[]): Promise<void> {
   await Promise.all(urls.map((url) => deletePostImage(url)));
+}
+
+/**
+ * Upload an avatar image to Supabase Storage
+ * @param file - The avatar image file to upload
+ * @param userId - The ID of the user uploading the avatar
+ * @returns Public URL of the uploaded avatar
+ */
+export async function uploadAvatar(
+  file: File,
+  userId: string
+): Promise<string> {
+  // Validate file
+  const validationError = validateImageFile(file);
+  if (validationError) {
+    throw new Error(validationError.error);
+  }
+
+  // Generate filename in user's folder (required for RLS policy)
+  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  const fileName = `${userId}/avatar.${fileExt}`;
+
+  try {
+    const supabase = await createClient();
+
+    // Convert File to ArrayBuffer for upload
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = new Uint8Array(arrayBuffer);
+
+    // Upload to Supabase Storage (upsert: true to replace existing avatar)
+    const { data, error } = await supabase.storage
+      .from(AVATARS_BUCKET)
+      .upload(fileName, buffer, {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: true, // Replace existing avatar
+      });
+
+    if (error) {
+      console.error('Supabase avatar upload error:', error);
+      throw new Error(`Eroare la încărcarea avatarului: ${error.message}`);
+    }
+
+    // Get public URL
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(AVATARS_BUCKET).getPublicUrl(data.path);
+
+    return publicUrl;
+  } catch (error) {
+    console.error('Avatar upload error:', error);
+    throw error instanceof Error
+      ? error
+      : new Error('Eroare necunoscută la încărcarea avatarului');
+  }
+}
+
+/**
+ * Delete an avatar from Supabase Storage
+ * @param url - The public URL of the avatar to delete
+ */
+export async function deleteAvatar(url: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+
+    // Extract file path from URL
+    const urlParts = url.split(`/${AVATARS_BUCKET}/`);
+    if (urlParts.length < 2) {
+      throw new Error('Invalid avatar URL');
+    }
+
+    const filePath = urlParts[1].split('?')[0]; // Remove query params
+
+    const { error } = await supabase.storage
+      .from(AVATARS_BUCKET)
+      .remove([filePath]);
+
+    if (error) {
+      console.error('Supabase avatar delete error:', error);
+      throw new Error(`Eroare la ștergerea avatarului: ${error.message}`);
+    }
+  } catch (error) {
+    console.error('Avatar delete error:', error);
+    // Don't throw - allow operation to succeed even if deletion fails
+  }
 }
