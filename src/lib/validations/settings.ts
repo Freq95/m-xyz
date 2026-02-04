@@ -3,7 +3,6 @@ import { z } from 'zod';
 export const notificationPreferencesSchema = z.object({
   email_comments: z.boolean(),
   email_alerts: z.boolean(),
-  email_messages: z.boolean(),
   email_digest: z.enum(['daily', 'weekly', 'never']),
   push_enabled: z.boolean(),
 });

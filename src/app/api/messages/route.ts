@@ -6,7 +6,6 @@ import { NotFoundError, RateLimitError, AuthorizationError } from '@/lib/errors'
 import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
 import { sendMessageSchema } from '@/lib/validations/message';
-import { createNotification } from '@/lib/services/notification.service';
 import { messageRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
@@ -41,9 +40,6 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         isBanned: true,
-        displayName: true,
-        fullName: true,
-        notificationPreferences: true,
       },
     });
 
@@ -101,20 +97,6 @@ export async function POST(request: NextRequest) {
         data: { lastMessageAt: new Date() },
       }),
     ]);
-
-    // Create notification (fire-and-forget, respect preferences)
-    const prefs = recipient.notificationPreferences as { email_messages?: boolean } | null;
-    if (!prefs || prefs.email_messages !== false) {
-      const senderName = sender.displayName || sender.fullName;
-
-      createNotification({
-        userId: validatedData.recipientId,
-        type: 'NEW_MESSAGE',
-        title: `${senderName} ți-a trimis un mesaj`,
-        body: sanitizedBody.substring(0, 100) + (sanitizedBody.length > 100 ? '...' : ''),
-        data: { conversationId: conversation.id, senderId: user.id },
-      }).catch((err) => console.error('Failed to create notification:', err));
-    }
 
     return successResponse({
       id: message.id,

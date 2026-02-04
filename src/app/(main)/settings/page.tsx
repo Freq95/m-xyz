@@ -9,7 +9,6 @@ import { useToast } from '@/components/shared/toast';
 interface NotificationPreferences {
   email_comments: boolean;
   email_alerts: boolean;
-  email_messages: boolean;
   email_digest: 'daily' | 'weekly' | 'never';
   push_enabled: boolean;
 }
@@ -58,7 +57,6 @@ export default function SettingsPage() {
             notificationPreferences: data.notificationPreferences || {
               email_comments: true,
               email_alerts: true,
-              email_messages: true,
               email_digest: 'daily',
               push_enabled: true,
             },
@@ -269,24 +267,6 @@ export default function SettingsPage() {
                   </label>
                   <p className="text-xs text-muted-foreground">
                     Primește email pentru alerte importante din cartier
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="email_messages"
-                  checked={settings.notificationPreferences?.email_messages ?? true}
-                  onChange={(e) => updateNotificationPref('email_messages', e.target.checked)}
-                  className="mt-1 w-4 h-4 rounded border-input"
-                />
-                <div className="flex-1">
-                  <label htmlFor="email_messages" className="text-sm font-medium cursor-pointer">
-                    Mesaje noi
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    Primește email când primești mesaje noi
                   </p>
                 </div>
               </div>

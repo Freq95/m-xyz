@@ -1,10 +1,10 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { RefreshCw, Settings, MessageSquare } from 'lucide-react';
+import { RefreshCw, Settings } from 'lucide-react';
 import { Button, Card, Avatar } from '@/components/ui';
 import { FeedClient, FeedSkeleton, NoNeighborhoodState } from '@/components/feed';
-import { NotificationBell } from '@/components/layout';
+import { NotificationBell, MessageBadge } from '@/components/layout';
 import { getAuthUser } from '@/lib/auth';
 import prisma from '@/lib/prisma/client';
 import { redis, CACHE_KEYS, CACHE_TTL } from '@/lib/redis/client';
@@ -191,11 +191,7 @@ export default async function FeedPage({ searchParams }: PageProps) {
                 </Button>
               </form>
               <NotificationBell />
-              <Link href="/messages">
-                <Button variant="ghost" size="sm" aria-label="Mesaje">
-                  <MessageSquare className="w-5 h-5" />
-                </Button>
-              </Link>
+              <MessageBadge />
               <Link href="/settings">
                 <Button variant="ghost" size="sm" aria-label="Deschide setările">
                   <Settings className="w-5 h-5" />
