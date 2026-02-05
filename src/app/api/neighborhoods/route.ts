@@ -6,7 +6,7 @@ import { handleApiError, successResponse } from '@/lib/errors/handler';
  * GET /api/neighborhoods
  * Fetches active neighborhoods (Timișoara pilot)
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const neighborhoods = await prisma.neighborhood.findMany({
       where: {

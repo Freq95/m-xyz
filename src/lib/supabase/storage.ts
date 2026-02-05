@@ -186,12 +186,15 @@ export async function uploadAvatar(
       throw new Error(`Eroare la încărcarea avatarului: ${error.message}`);
     }
 
-    // Get public URL
+    // Get public URL with cache-busting timestamp
     const {
       data: { publicUrl },
     } = supabase.storage.from(AVATARS_BUCKET).getPublicUrl(data.path);
 
-    return publicUrl;
+    // Add cache-busting parameter to force browser to fetch new image
+    const cacheBustedUrl = `${publicUrl}?t=${Date.now()}`;
+
+    return cacheBustedUrl;
   } catch (error) {
     console.error('Avatar upload error:', error);
     throw error instanceof Error

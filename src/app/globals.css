@@ -104,3 +104,8 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Text overflow utilities */
+.overflow-anywhere {
+  overflow-wrap: anywhere;
+}

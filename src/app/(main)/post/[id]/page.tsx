@@ -15,13 +15,13 @@ import {
   Edit,
   Share2,
   Flag,
-  Link as LinkIcon,
   Check,
   CheckCircle2,
   RotateCcw,
 } from 'lucide-react';
 import { Button, Card, Avatar, Textarea, Skeleton } from '@/components/ui';
 import { ConfirmModal, useToast } from '@/components/shared';
+import { PostForm } from '@/components/feed';
 import type { PostCategory } from '@/lib/validations/post';
 
 interface Post {
@@ -125,9 +125,6 @@ export default function PostDetailPage() {
   const [reportReason, setReportReason] = useState('');
   const [isReporting, setIsReporting] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [editBody, setEditBody] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
@@ -156,31 +153,31 @@ export default function PostDetailPage() {
   }, []);
 
   // Fetch post
-  useEffect(() => {
-    async function fetchPost() {
-      setIsLoading(true);
-      setError(null);
+  const fetchPost = useCallback(async () => {
+    if (!postId) return;
 
-      try {
-        const response = await fetch(`/api/posts/${postId}`);
-        const result = await response.json();
+    setIsLoading(true);
+    setError(null);
 
-        if (!response.ok) {
-          throw new Error(result.error || 'Postarea nu a fost găsită');
-        }
+    try {
+      const response = await fetch(`/api/posts/${postId}`);
+      const result = await response.json();
 
-        setPost(result.data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'A apărut o eroare');
-      } finally {
-        setIsLoading(false);
+      if (!response.ok) {
+        throw new Error(result.error || 'Postarea nu a fost găsită');
       }
-    }
 
-    if (postId) {
-      fetchPost();
+      setPost(result.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'A apărut o eroare');
+    } finally {
+      setIsLoading(false);
     }
   }, [postId]);
+
+  useEffect(() => {
+    fetchPost();
+  }, [fetchPost]);
 
   // Fetch comments
   const fetchComments = useCallback(async () => {
@@ -371,59 +368,15 @@ export default function PostDetailPage() {
     }
   };
 
-  // Edit post
-  const handleEdit = async () => {
-    if (!editBody.trim()) return;
-
-    setIsEditing(true);
-    try {
-      const response = await fetch(`/api/posts/${postId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editTitle.trim() || undefined,
-          body: editBody.trim(),
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        // Merge updated fields with existing post data
-        setPost((prev) =>
-          prev
-            ? {
-                ...prev,
-                title: result.data.title,
-                body: result.data.body,
-                category: result.data.category,
-                priceCents: result.data.priceCents,
-                isFree: result.data.isFree,
-                status: result.data.status,
-                updatedAt: result.data.updatedAt,
-              }
-            : null
-        );
-        setShowEditModal(false);
-        showToast('success', 'Postarea a fost actualizată');
-      } else {
-        const result = await response.json();
-        showToast('error', result.error || 'Nu s-a putut actualiza postarea');
-      }
-    } catch (err) {
-      console.error('Failed to edit:', err);
-      showToast('error', 'A apărut o eroare');
-    } finally {
-      setIsEditing(false);
-    }
+  // Edit post - handled by PostForm component
+  const handleEditSuccess = () => {
+    setShowEditModal(false);
+    // Refetch post to get updated data
+    fetchPost();
   };
 
-  // Open edit modal
   const openEditModal = () => {
-    if (post) {
-      setEditTitle(post.title || '');
-      setEditBody(post.body);
-      setShowEditModal(true);
-    }
+    setShowEditModal(true);
   };
 
   // Load all replies for a comment
@@ -489,7 +442,7 @@ export default function PostDetailPage() {
         if (showReportModal && !isReporting) {
           setShowReportModal(false);
           setReportReason('');
-        } else if (showEditModal && !isEditing) {
+        } else if (showEditModal) {
           setShowEditModal(false);
         }
       }
@@ -497,7 +450,7 @@ export default function PostDetailPage() {
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [showReportModal, showEditModal, isReporting, isEditing]);
+  }, [showReportModal, showEditModal, isReporting]);
 
   if (isLoading) {
     return (
@@ -976,48 +929,24 @@ export default function PostDetailPage() {
       )}
 
       {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-lg p-4">
-            <h3 className="font-semibold mb-3">Editează postarea</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Titlu (opțional)</label>
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="Titlul postării"
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Conținut</label>
-                <Textarea
-                  value={editBody}
-                  onChange={(e) => setEditBody(e.target.value)}
-                  placeholder="Conținutul postării..."
-                  rows={6}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowEditModal(false)}
-              >
-                Anulează
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleEdit}
-                disabled={!editBody.trim() || isEditing}
-                isLoading={isEditing}
-              >
-                Salvează
-              </Button>
-            </div>
+      {showEditModal && post && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl p-6 my-8">
+            <h3 className="text-xl font-semibold mb-4">Editează postarea</h3>
+            <PostForm
+              editMode
+              postId={post.id}
+              initialValues={{
+                category: post.category,
+                title: post.title,
+                body: post.body,
+                priceCents: post.priceCents,
+                isFree: post.isFree || false,
+                imageUrl: post.images[0]?.url || null,
+              }}
+              onSuccess={handleEditSuccess}
+              onCancel={() => setShowEditModal(false)}
+            />
           </div>
         </div>
       )}

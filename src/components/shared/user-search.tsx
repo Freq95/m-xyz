@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Search, X } from 'lucide-react';
-import Link from 'next/link';
-import { Avatar, Button, Input } from '@/components/ui';
+import { Avatar, Input } from '@/components/ui';
 
 interface User {
   id: string;

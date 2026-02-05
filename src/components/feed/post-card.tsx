@@ -343,7 +343,7 @@ function PostCardMenu({ postId }: { postId: string }) {
               value={reportReason}
               onChange={(e) => setReportReason(e.target.value)}
               placeholder="Descrie motivul raportării..."
-              className="w-full h-24 px-3 py-2 text-sm border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full h-24 px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
               autoFocus
             />
             <div className="flex justify-end gap-2 mt-3">

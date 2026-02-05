@@ -48,3 +48,5 @@ build.log
 
 logo*.png
 logo*.jpg
+
+redis-db-metrics.png

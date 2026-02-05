@@ -316,13 +316,13 @@ export default function ConversationPage() {
               )}
 
               {messages.map((msg) => (
-                <div key={msg.id} className={`flex gap-3 ${msg.isFromMe ? 'flex-row-reverse' : ''}`}>
-                  <Avatar src={msg.sender.avatarUrl} fallback={msg.sender.name} size="sm" />
-                  <div className={`flex flex-col ${msg.isFromMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
-                    <div className={`p-3 rounded-lg ${msg.isFromMe ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                      <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                <div key={msg.id} className={`flex gap-3 ${msg.isFromMe ? 'flex-row-reverse' : ''} min-w-0`}>
+                  <Avatar src={msg.sender.avatarUrl} fallback={msg.sender.name} size="sm" className="flex-shrink-0" />
+                  <div className={`flex flex-col ${msg.isFromMe ? 'items-end' : 'items-start'} max-w-[70%] min-w-0`}>
+                    <div className={`p-3 rounded-lg ${msg.isFromMe ? 'bg-primary text-primary-foreground' : 'bg-muted'} break-words`}>
+                      <p className="text-sm whitespace-pre-wrap break-words overflow-anywhere">{msg.body}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1 break-words">
                       {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true, locale: ro })}
                     </p>
                   </div>

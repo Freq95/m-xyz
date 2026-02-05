@@ -26,9 +26,12 @@ export async function GET(
       limit: searchParams.get('limit') || 20,
     });
 
+    // Check if id is a UUID (old format) or username (new format)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
     // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { id },
+    const user = await prisma.user.findFirst({
+      where: isUUID ? { id } : { username: id },
       select: { id: true },
     });
 
@@ -48,10 +51,10 @@ export async function GET(
       }
     }
 
-    // Fetch user's posts
+    // Fetch user's posts (use user.id, not id param, since id param could be username)
     const posts = await prisma.post.findMany({
       where: {
-        authorId: id,
+        authorId: user.id,
         status: 'active',
         ...cursorCondition,
       },

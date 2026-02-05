@@ -31,7 +31,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload avatar to Supabase Storage
+    // Get current avatar URL before uploading new one
+    const currentUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { avatarUrl: true },
+    });
+
+    // Delete old avatar if exists (prevents having multiple avatar files with different extensions)
+    if (currentUser?.avatarUrl) {
+      await deleteAvatar(currentUser.avatarUrl);
+    }
+
+    // Upload new avatar to Supabase Storage
     const avatarUrl = await uploadAvatar(file, user.id);
 
     // Update user avatar in database

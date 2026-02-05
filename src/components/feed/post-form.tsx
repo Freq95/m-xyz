@@ -19,9 +19,20 @@ const categories: { value: PostCategory; label: string; icon: React.ReactNode; c
 
 interface PostFormProps {
   onSuccess?: () => void;
+  onCancel?: () => void;
+  editMode?: boolean;
+  postId?: string;
+  initialValues?: {
+    category: PostCategory;
+    title?: string | null;
+    body: string;
+    priceCents?: number | null;
+    isFree?: boolean;
+    imageUrl?: string | null;
+  };
 }
 
-export function PostForm({ onSuccess }: PostFormProps) {
+export function PostForm({ onSuccess, onCancel, editMode = false, postId, initialValues }: PostFormProps) {
   const router = useRouter();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -29,13 +40,14 @@ export function PostForm({ onSuccess }: PostFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
 
-  const [category, setCategory] = useState<PostCategory | null>(null);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [price, setPrice] = useState('');
-  const [isFree, setIsFree] = useState(false);
+  const [category, setCategory] = useState<PostCategory | null>(initialValues?.category || null);
+  const [title, setTitle] = useState(initialValues?.title || '');
+  const [body, setBody] = useState(initialValues?.body || '');
+  const [price, setPrice] = useState(initialValues?.priceCents ? (initialValues.priceCents / 100).toFixed(2) : '');
+  const [isFree, setIsFree] = useState(initialValues?.isFree || false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(initialValues?.imageUrl || null);
+  const [removeExistingImage, setRemoveExistingImage] = useState(false);
 
   const isMarketplace = category === 'SELL' || category === 'BUY' || category === 'SERVICE';
 
@@ -69,6 +81,9 @@ export function PostForm({ onSuccess }: PostFormProps) {
   const handleRemoveImage = () => {
     setSelectedImage(null);
     setImagePreview(null);
+    if (editMode && initialValues?.imageUrl) {
+      setRemoveExistingImage(true);
+    }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -106,10 +121,12 @@ export function PostForm({ onSuccess }: PostFormProps) {
     setIsLoading(true);
 
     try {
-      // Use FormData if image is selected, otherwise JSON
+      const endpoint = editMode ? `/api/posts/${postId}` : '/api/posts';
+      const method = editMode ? 'PATCH' : 'POST';
       let response;
 
-      if (selectedImage) {
+      // Use FormData if image is selected or removed, otherwise JSON
+      if (selectedImage || (editMode && removeExistingImage)) {
         const formData = new FormData();
         formData.append('title', validationResult.data.title || '');
         formData.append('body', validationResult.data.body);
@@ -120,15 +137,20 @@ export function PostForm({ onSuccess }: PostFormProps) {
         if (validationResult.data.isFree !== undefined) {
           formData.append('isFree', validationResult.data.isFree.toString());
         }
-        formData.append('image', selectedImage);
+        if (selectedImage) {
+          formData.append('image', selectedImage);
+        }
+        if (editMode && removeExistingImage) {
+          formData.append('removeImage', 'true');
+        }
 
-        response = await fetch('/api/posts', {
-          method: 'POST',
+        response = await fetch(endpoint, {
+          method,
           body: formData,
         });
       } else {
-        response = await fetch('/api/posts', {
-          method: 'POST',
+        response = await fetch(endpoint, {
+          method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(validationResult.data),
         });
@@ -152,8 +174,8 @@ export function PostForm({ onSuccess }: PostFormProps) {
         return;
       }
 
-      // Success - show toast and redirect to feed or call callback
-      toast.success('Postarea a fost creată cu succes');
+      // Success - show toast and call callback or redirect
+      toast.success(editMode ? 'Postarea a fost actualizată cu succes' : 'Postarea a fost creată cu succes');
 
       if (onSuccess) {
         onSuccess();
@@ -335,7 +357,7 @@ export function PostForm({ onSuccess }: PostFormProps) {
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.back()}
+          onClick={onCancel || (() => router.back())}
           disabled={isLoading}
           className="flex-1"
         >
@@ -347,7 +369,7 @@ export function PostForm({ onSuccess }: PostFormProps) {
           disabled={!category || !body.trim()}
           className="flex-1"
         >
-          Publică
+          {editMode ? 'Salvează' : 'Publică'}
         </Button>
       </div>
     </form>

@@ -6,7 +6,7 @@ import { readRateLimit } from '@/lib/rate-limit';
 import { RateLimitError } from '@/lib/errors';
 import { redis } from '@/lib/redis/client';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const user = await getAuthUser();
 

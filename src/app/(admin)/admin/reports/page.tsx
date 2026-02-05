@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, Button, Avatar } from '@/components/ui';
-import { Flag, Eye, Ban, EyeOff, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Flag, Ban, EyeOff, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Reporter {
   id: string;

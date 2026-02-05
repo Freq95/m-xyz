@@ -3,7 +3,6 @@
 import { useState, useTransition, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 // import { useVirtualizer } from '@tanstack/react-virtual';
-import { Button } from '@/components/ui';
 import { PostCard, EmptyState } from '@/components/feed';
 import type { PostCategory } from '@/lib/validations/post';
 

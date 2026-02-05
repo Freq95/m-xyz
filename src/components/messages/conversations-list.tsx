@@ -4,9 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { ro } from 'date-fns/locale';
-import { Button, Card, Avatar, Skeleton } from '@/components/ui';
+import { Button, Avatar, Skeleton } from '@/components/ui';
 import { useToast } from '@/components/shared';
-import { getProfileUrl } from '@/lib/utils/profile';
 
 interface Conversation {
   id: string;

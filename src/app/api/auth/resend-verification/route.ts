@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
-import { RateLimitError, AuthorizationError, NotFoundError } from '@/lib/errors';
+import { RateLimitError, AuthorizationError } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
 import { authRateLimit, getClientIp } from '@/lib/rate-limit';
 import { validateOrigin } from '@/lib/csrf';

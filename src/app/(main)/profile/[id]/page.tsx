@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { ro } from 'date-fns/locale';
-import { ArrowLeft, MapPin, Calendar, MessageSquare, FileText } from 'lucide-react';
-import { Button, Card, Avatar, Skeleton, Textarea, Input } from '@/components/ui';
+import { ArrowLeft, MapPin, Calendar, MessageSquare, FileText, Settings } from 'lucide-react';
+import { Button, Card, Avatar, Skeleton } from '@/components/ui';
 import { PostCard } from '@/components/feed';
 import type { PostCategory } from '@/lib/validations/post';
 
@@ -62,7 +62,6 @@ interface CurrentUser {
 
 export default function ProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const userId = params.id as string;
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -74,10 +73,6 @@ export default function ProfilePage() {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editDisplayName, setEditDisplayName] = useState('');
-  const [editBio, setEditBio] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
 
   // Fetch current user
   useEffect(() => {
@@ -173,53 +168,6 @@ export default function ProfilePage() {
 
   const isOwnProfile = currentUser?.id === profile?.id;
 
-  // Open edit modal
-  const openEditModal = () => {
-    if (profile) {
-      setEditDisplayName(profile.name || '');
-      setEditBio(profile.bio || '');
-      setShowEditModal(true);
-    }
-  };
-
-  // Handle profile update
-  const handleEditProfile = async () => {
-    setIsEditing(true);
-    try {
-      const response = await fetch('/api/user/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          displayName: editDisplayName.trim() || undefined,
-          bio: editBio.trim() || undefined,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        // Update profile with new data
-        setProfile((prev) =>
-          prev
-            ? {
-                ...prev,
-                name: result.data.name,
-                bio: result.data.bio,
-              }
-            : null
-        );
-        setShowEditModal(false);
-      } else {
-        const result = await response.json();
-        alert(result.error || 'Nu s-a putut actualiza profilul');
-      }
-    } catch (err) {
-      console.error('Failed to update profile:', err);
-      alert('A apărut o eroare');
-    } finally {
-      setIsEditing(false);
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -286,9 +234,11 @@ export default function ProfilePage() {
             <span className="font-semibold">Profil</span>
           </div>
           {isOwnProfile ? (
-            <Button variant="outline" size="sm" onClick={openEditModal}>
-              Editează
-            </Button>
+            <Link href="/settings">
+              <Button variant="outline" size="sm" aria-label="Setări">
+                <Settings className="w-4 h-4" />
+              </Button>
+            </Link>
           ) : (
             <Link href={`/messages/new?userId=${profile.id}`}>
               <Button variant="outline" size="sm">
@@ -401,63 +351,6 @@ export default function ProfilePage() {
           )}
         </div>
       </main>
-
-      {/* Edit Profile Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md p-4">
-            <h3 className="font-semibold mb-4">Editează profilul</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-1 block">
-                  Nume afișat
-                </label>
-                <Input
-                  value={editDisplayName}
-                  onChange={(e) => setEditDisplayName(e.target.value)}
-                  placeholder="Numele tău"
-                  maxLength={50}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Acesta va fi afișat în loc de numele complet.
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">
-                  Bio
-                </label>
-                <Textarea
-                  value={editBio}
-                  onChange={(e) => setEditBio(e.target.value)}
-                  placeholder="Spune ceva despre tine..."
-                  rows={3}
-                  maxLength={500}
-                />
-                <p className="text-xs text-muted-foreground mt-1 text-right">
-                  {editBio.length}/500
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowEditModal(false)}
-              >
-                Anulează
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleEditProfile}
-                disabled={isEditing}
-                isLoading={isEditing}
-              >
-                Salvează
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

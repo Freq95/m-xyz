@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Upload, X } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Button, Card, Input, Textarea, Avatar } from '@/components/ui';
 import { useToast } from '@/components/shared/toast';
+import { AvatarPreviewModal } from '@/components/shared';
 
 interface NotificationPreferences {
   email_comments: boolean;
@@ -32,12 +33,12 @@ interface Settings {
 export default function SettingsPage() {
   const toast = useToast();
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [initialSettings, setInitialSettings] = useState<Settings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
 
@@ -112,12 +113,14 @@ export default function SettingsPage() {
     // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('Imaginea este prea mare. Mărimea maximă este 5MB');
+      e.target.value = '';
       return;
     }
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('Te rugăm să încarci o imagine');
+      e.target.value = '';
       return;
     }
 
@@ -148,9 +151,7 @@ export default function SettingsPage() {
       toast.error('Eroare de conexiune');
     } finally {
       setIsUploadingAvatar(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      e.target.value = '';
     }
   };
 
@@ -287,46 +288,28 @@ export default function SettingsPage() {
                 <label className="text-sm font-medium mb-2 block">
                   Poză de profil
                 </label>
-                <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setIsAvatarModalOpen(true)}
+                  className="group relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-full"
+                  aria-label="Deschide previzualizare avatar"
+                >
                   <Avatar
+                    key={settings.avatarUrl || 'no-avatar'}
                     src={settings.avatarUrl || undefined}
                     alt={settings.displayName || settings.email}
                     size="lg"
                     fallback={settings.displayName?.[0] || settings.email[0]}
+                    className="transition-opacity group-hover:opacity-80"
                   />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      isLoading={isUploadingAvatar}
-                      disabled={isUploadingAvatar}
-                    >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Încarcă
-                    </Button>
-                    {settings.avatarUrl && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleRemoveAvatar}
-                        disabled={isUploadingAvatar}
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Șterge
-                      </Button>
-                    )}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-white text-xs font-medium">
+                      Schimbă
+                    </span>
                   </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    className="hidden"
-                  />
-                </div>
+                </button>
                 <p className="text-xs text-muted-foreground mt-2">
-                  JPG, PNG sau WebP. Maxim 5MB.
+                  Apasă pe poză pentru a schimba sau șterge
                 </p>
               </div>
 
@@ -547,6 +530,18 @@ export default function SettingsPage() {
             </div>
           </Card>
         </div>
+
+        {/* Avatar Preview Modal */}
+        <AvatarPreviewModal
+          isOpen={isAvatarModalOpen}
+          onClose={() => setIsAvatarModalOpen(false)}
+          avatarUrl={settings.avatarUrl}
+          displayName={settings.displayName}
+          email={settings.email}
+          onUpload={handleAvatarUpload}
+          onRemove={handleRemoveAvatar}
+          isUploading={isUploadingAvatar}
+        />
       </div>
     </div>
   );
