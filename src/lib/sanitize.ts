@@ -1,24 +1,35 @@
-// XSS sanitization with graceful fallback if DOMPurify is not installed
-// In production, ensure isomorphic-dompurify is installed: npm install isomorphic-dompurify
+// XSS sanitization - REQUIRES isomorphic-dompurify for production
+// Fallback is ONLY for development/build compatibility
 
 let DOMPurify: any = null;
+let isDOMPurifyAvailable = false;
 
 try {
   const dompurifyModule = require('isomorphic-dompurify');
-  // Handle both default export and named export
   DOMPurify = dompurifyModule.default || dompurifyModule;
-} catch {
-  console.warn('⚠️  isomorphic-dompurify not installed. Using basic sanitization fallback.');
+  isDOMPurifyAvailable = DOMPurify && typeof DOMPurify.sanitize === 'function';
+
+  if (!isDOMPurifyAvailable) {
+    console.error('⚠️ CRITICAL: DOMPurify loaded but sanitize function not available');
+  }
+} catch (error) {
+  console.error('⚠️ CRITICAL: isomorphic-dompurify failed to load:', error);
 }
 
 /**
- * Basic HTML tag stripping fallback when DOMPurify is not available.
- * NOT as secure as DOMPurify - install the package for production!
+ * Basic HTML tag stripping fallback - INSECURE, only for build/dev
+ * DO NOT USE IN PRODUCTION
  */
 function basicStripTags(input: string): string {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('CRITICAL SECURITY ERROR: DOMPurify unavailable in production. Cannot sanitize user input safely.');
+  }
+
+  console.warn('⚠️ Using insecure fallback sanitization - DOMPurify not available');
+
   return input
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
-    .replace(/<[^>]*>/g, '') // Remove all HTML tags
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
@@ -34,18 +45,14 @@ function basicStripTags(input: string): string {
 export function sanitizeText(input: string): string {
   if (!input) return '';
 
-  try {
-    if (DOMPurify && typeof DOMPurify.sanitize === 'function') {
-      return DOMPurify.sanitize(input, {
-        ALLOWED_TAGS: [], // No HTML allowed
-        ALLOWED_ATTR: [], // No attributes allowed
-      }).trim();
-    }
-  } catch (err) {
-    console.error('DOMPurify error, using fallback:', err);
+  if (isDOMPurifyAvailable) {
+    return DOMPurify.sanitize(input, {
+      ALLOWED_TAGS: [], // No HTML allowed
+      ALLOWED_ATTR: [], // No attributes allowed
+    }).trim();
   }
 
-  // Fallback: basic tag stripping
+  // Fallback - throws error in production
   return basicStripTags(input);
 }
 
@@ -56,19 +63,15 @@ export function sanitizeText(input: string): string {
 export function sanitizeHtml(input: string): string {
   if (!input) return '';
 
-  try {
-    if (DOMPurify && typeof DOMPurify.sanitize === 'function') {
-      return DOMPurify.sanitize(input, {
-        ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'a', 'ul', 'ol', 'li'],
-        ALLOWED_ATTR: ['href', 'target', 'rel'],
-        ADD_ATTR: ['target'],
-        FORBID_ATTR: ['style', 'onclick', 'onerror'],
-      }).trim();
-    }
-  } catch (err) {
-    console.error('DOMPurify error, using fallback:', err);
+  if (isDOMPurifyAvailable) {
+    return DOMPurify.sanitize(input, {
+      ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'a', 'ul', 'ol', 'li'],
+      ALLOWED_ATTR: ['href', 'target', 'rel'],
+      ADD_ATTR: ['target'],
+      FORBID_ATTR: ['style', 'onclick', 'onerror'],
+    }).trim();
   }
 
-  // Fallback: strip all tags (less permissive but safer without proper sanitizer)
+  // Fallback - throws error in production, strips all HTML in dev
   return basicStripTags(input);
 }

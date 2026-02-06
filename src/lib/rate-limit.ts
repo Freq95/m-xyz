@@ -115,14 +115,37 @@ export const readRateLimit = redis && Ratelimit
 
 /**
  * Get client IP address from request
+ *
+ * IMPORTANT: This implementation assumes you're behind a trusted reverse proxy
+ * (Vercel, Cloudflare, etc.) that sets x-forwarded-for correctly.
+ *
+ * For additional security, you should:
+ * 1. Configure your reverse proxy to strip/overwrite x-forwarded-for from clients
+ * 2. Use Vercel's ip() function if deployed on Vercel
+ * 3. Validate IP format to prevent injection
  */
 export function getClientIp(request: Request): string {
   // Check various headers for IP address (in order of preference)
   const headers = request.headers;
 
+  // x-forwarded-for format: "client, proxy1, proxy2"
+  // Take the first IP (client) but validate it
   const forwarded = headers.get('x-forwarded-for');
   if (forwarded) {
-    return forwarded.split(',')[0].trim();
+    const clientIp = forwarded.split(',')[0].trim();
+
+    // Basic validation: IP should match IPv4 or IPv6 format
+    // IPv4: xxx.xxx.xxx.xxx
+    // IPv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+
+    if (ipv4Regex.test(clientIp) || ipv6Regex.test(clientIp)) {
+      return clientIp;
+    }
+
+    // Invalid IP format - possible spoofing attempt
+    console.warn(`Invalid IP format in x-forwarded-for: ${clientIp}`);
   }
 
   const realIp = headers.get('x-real-ip');
@@ -131,5 +154,6 @@ export function getClientIp(request: Request): string {
   }
 
   // Fallback to a default (shouldn't happen in production)
+  // Using 'unknown' ensures rate limiting still works (all unknown IPs share same limit)
   return 'unknown';
 }

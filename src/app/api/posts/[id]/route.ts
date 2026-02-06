@@ -6,6 +6,7 @@ import {
   AuthorizationError,
   NotFoundError,
   ValidationError,
+  RateLimitError,
 } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
 import { updatePostSchema, IMAGE_VALIDATION } from '@/lib/validations/post';
@@ -13,6 +14,8 @@ import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
 import { invalidateFeedCache } from '@/lib/redis/client';
 import { uploadPostImage, deletePostImage } from '@/lib/supabase/storage';
+import { hasBlockedUser } from '@/lib/services/block.service';
+import { readRateLimit } from '@/lib/rate-limit';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -24,6 +27,19 @@ interface RouteContext {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
+
+    // Get authenticated user (optional)
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+
+    // Rate limiting for read operations (300 reads per minute)
+    if (readRateLimit && userId) {
+      const { success } = await readRateLimit.limit(userId);
+      if (!success) {
+        throw new RateLimitError('Prea multe cereri. Încearcă din nou peste puțin.');
+      }
+    }
 
     const post = await prisma.post.findUnique({
       where: { id },
@@ -46,13 +62,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
         images: {
           orderBy: { position: 'asc' },
         },
-        _count: {
-          select: {
-            comments: {
-              where: { status: 'active' },
-            },
-          },
-        },
       },
     });
 
@@ -60,11 +69,49 @@ export async function GET(request: NextRequest, context: RouteContext) {
       throw new NotFoundError('Postarea');
     }
 
+    // Check if current user has blocked the post author
+    if (userId) {
+      const isBlocked = await hasBlockedUser(userId, post.authorId);
+      if (isBlocked) {
+        throw new NotFoundError('Postarea');
+      }
+    }
+
+    // Check if current user has liked the post
+    let isLiked = false;
+    if (userId) {
+      const like = await prisma.postLike.findUnique({
+        where: {
+          userId_postId: {
+            userId,
+            postId: id,
+          },
+        },
+      });
+      isLiked = !!like;
+    }
+
+    // Check if current user has saved the post
+    let isSaved = false;
+    if (userId) {
+      const saved = await prisma.savedPost.findUnique({
+        where: {
+          userId_postId: {
+            userId,
+            postId: id,
+          },
+        },
+      });
+      isSaved = !!saved;
+    }
+
     // Increment view count (fire and forget)
     prisma.post.update({
       where: { id },
       data: { viewCount: { increment: 1 } },
-    }).catch(() => {});
+    }).catch((error) => {
+      console.error('Failed to increment view count:', error);
+    });
 
     return successResponse({
       id: post.id,
@@ -76,8 +123,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
       isFree: post.isFree,
       isPinned: post.isPinned,
       status: post.status,
-      commentCount: post._count.comments,
+      commentCount: post.commentCount,
       viewCount: post.viewCount,
+      likeCount: post.likeCount,
+      isLiked,
+      isSaved,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
       author: {
@@ -223,7 +273,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
 
       // Upload new image
-      const { url, thumbnailUrl, width, height } = await uploadPostImage(imageFile, user.id);
+      const { url, thumbnailUrl, width, height, sizeBytes } = await uploadPostImage(imageFile, user.id);
       await prisma.postImage.create({
         data: {
           postId: id,
@@ -231,6 +281,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           thumbnailUrl,
           width,
           height,
+          sizeBytes,
           position: 0,
         },
       });

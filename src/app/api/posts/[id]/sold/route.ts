@@ -8,6 +8,7 @@ import {
 } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
 import { validateOrigin } from '@/lib/csrf';
+import { invalidateFeedCache } from '@/lib/redis/client';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -70,6 +71,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         status: true,
       },
     });
+
+    // Invalidate feed cache (status changed)
+    await invalidateFeedCache();
 
     return successResponse({
       id: updatedPost.id,

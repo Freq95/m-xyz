@@ -4,6 +4,7 @@ import { handleApiError, successResponse } from '@/lib/errors/handler';
 import { AuthenticationError } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
 import { z } from 'zod';
+import { getBlockedUserIds } from '@/lib/services/block.service';
 
 const savedPostsQuerySchema = z.object({
   cursor: z.string().uuid().optional(),
@@ -31,6 +32,9 @@ export async function GET(request: NextRequest) {
       limit: searchParams.get('limit') || 20,
     });
 
+    // Get blocked user IDs to filter out
+    const blockedUserIds = await getBlockedUserIds(user.id);
+
     // Build cursor condition for pagination
     let cursorCondition = {};
     if (query.cursor) {
@@ -43,13 +47,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch saved posts
+    // Fetch saved posts (excluding posts from blocked users)
     const savedPosts = await prisma.savedPost.findMany({
       where: {
         userId: user.id,
         ...cursorCondition,
         post: {
           status: 'active',
+          authorId: blockedUserIds.length > 0 ? { notIn: blockedUserIds } : undefined,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -76,13 +81,6 @@ export async function GET(request: NextRequest) {
               orderBy: { position: 'asc' },
               take: 4,
             },
-            _count: {
-              select: {
-                comments: {
-                  where: { status: 'active' },
-                },
-              },
-            },
           },
         },
       },
@@ -92,6 +90,19 @@ export async function GET(request: NextRequest) {
     const hasMore = savedPosts.length > query.limit;
     const postsToReturn = hasMore ? savedPosts.slice(0, -1) : savedPosts;
     const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1]?.postId : undefined;
+
+    // Check which posts the user has liked
+    let likedPostIds = new Set<string>();
+    if (postsToReturn.length > 0) {
+      const likes = await prisma.postLike.findMany({
+        where: {
+          userId: user.id,
+          postId: { in: postsToReturn.map(sp => sp.post.id) },
+        },
+        select: { postId: true },
+      });
+      likedPostIds = new Set(likes.map(like => like.postId));
+    }
 
     return successResponse(
       postsToReturn.map((saved) => ({
@@ -103,8 +114,11 @@ export async function GET(request: NextRequest) {
         currency: saved.post.currency,
         isFree: saved.post.isFree,
         isPinned: saved.post.isPinned,
-        commentCount: saved.post._count.comments,
+        commentCount: saved.post.commentCount,
         viewCount: saved.post.viewCount,
+        likeCount: saved.post.likeCount,
+        isLiked: likedPostIds.has(saved.post.id),
+        isSaved: true, // Always true for saved posts
         createdAt: saved.post.createdAt,
         savedAt: saved.createdAt,
         author: {

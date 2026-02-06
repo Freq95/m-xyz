@@ -35,9 +35,9 @@ async function getUserData(userId: string) {
   return user;
 }
 
-async function getPosts(neighborhoodSlug: string, category?: string, filter?: string) {
-  // Try cache first - cache ALL queries including filtered categories
-  const shouldCache = !!redis;
+async function getPosts(neighborhoodSlug: string, userId: string, category?: string, filter?: string) {
+  // Don't cache user-specific data (includes blocked users and liked status)
+  const shouldCache = false; // Disabled caching since data is user-specific
   const cacheKey = shouldCache
     ? CACHE_KEYS.FEED({
         neighborhoodSlug,
@@ -64,6 +64,13 @@ async function getPosts(neighborhoodSlug: string, category?: string, filter?: st
     return { posts: [], hasMore: false };
   }
 
+  // Get list of blocked user IDs
+  const blockedUsers = await prisma.blockedUser.findMany({
+    where: { blockerId: userId },
+    select: { blockedId: true },
+  });
+  const blockedUserIds = blockedUsers.map(b => b.blockedId);
+
   // Fetch posts
   const posts = await prisma.post.findMany({
     where: {
@@ -73,6 +80,9 @@ async function getPosts(neighborhoodSlug: string, category?: string, filter?: st
       ...(filter === 'gratuit' && {
         category: 'SELL',
         isFree: true,
+      }),
+      ...(blockedUserIds.length > 0 && {
+        authorId: { notIn: blockedUserIds },
       }),
     },
     orderBy: [
@@ -94,7 +104,11 @@ async function getPosts(neighborhoodSlug: string, category?: string, filter?: st
         take: 4,
       },
       _count: {
-        select: { comments: true },
+        select: {
+          comments: {
+            where: { status: 'active' },
+          },
+        },
       },
     },
   });
@@ -102,6 +116,19 @@ async function getPosts(neighborhoodSlug: string, category?: string, filter?: st
   const hasMore = posts.length > 20;
   const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
   const cursor = hasMore ? postsToReturn[postsToReturn.length - 1]?.id : undefined;
+
+  // Check which posts the user has liked
+  let likedPostIds = new Set<string>();
+  if (postsToReturn.length > 0) {
+    const likes = await prisma.postLike.findMany({
+      where: {
+        userId,
+        postId: { in: postsToReturn.map(p => p.id) },
+      },
+      select: { postId: true },
+    });
+    likedPostIds = new Set(likes.map(like => like.postId));
+  }
 
   const formattedPosts = postsToReturn.map((post) => ({
     id: post.id,
@@ -115,6 +142,8 @@ async function getPosts(neighborhoodSlug: string, category?: string, filter?: st
     status: post.status,
     commentCount: post._count.comments,
     viewCount: post.viewCount,
+    likeCount: post.likeCount,
+    isLiked: likedPostIds.has(post.id),
     createdAt: post.createdAt.toISOString(),
     author: {
       id: post.author.id,
@@ -138,8 +167,8 @@ async function getPosts(neighborhoodSlug: string, category?: string, filter?: st
   return result;
 }
 
-async function FeedPosts({ neighborhoodSlug, category, filter }: { neighborhoodSlug: string; category?: string; filter?: string }) {
-  const { posts, hasMore, cursor } = await getPosts(neighborhoodSlug, category, filter);
+async function FeedPosts({ neighborhoodSlug, userId, category, filter }: { neighborhoodSlug: string; userId: string; category?: string; filter?: string }) {
+  const { posts, hasMore, cursor } = await getPosts(neighborhoodSlug, userId, category, filter);
 
   return (
     <FeedClient
@@ -225,7 +254,7 @@ export default async function FeedPage({ searchParams }: PageProps) {
             <NoNeighborhoodState />
           ) : (
             <Suspense fallback={<FeedSkeleton />}>
-              <FeedPosts neighborhoodSlug={user.neighborhood.slug} category={category} filter={filter} />
+              <FeedPosts neighborhoodSlug={user.neighborhood.slug} userId={user.id} category={category} filter={filter} />
             </Suspense>
           )}
         </main>

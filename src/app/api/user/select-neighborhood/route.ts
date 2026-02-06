@@ -1,7 +1,7 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma/client';
 import { selectNeighborhoodSchema } from '@/lib/validations/user';
-import { handleApiError, successResponse } from '@/lib/errors/handler';
+import { handleApiError } from '@/lib/errors/handler';
 import { AuthenticationError, AuthorizationError, NotFoundError } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
 import { validateOrigin } from '@/lib/csrf';
@@ -111,10 +111,25 @@ export async function POST(request: NextRequest) {
       // Don't throw error - the database update succeeded, this is just for caching
     }
 
-    return successResponse({
-      user: updatedUser,
-      message: 'Cartier selectat cu succes',
+    // Set a cookie to signal onboarding completion (fixes middleware race condition)
+    // This provides immediate feedback to middleware before JWT metadata is refreshed
+    const response = NextResponse.json({
+      success: true,
+      data: {
+        user: updatedUser,
+        message: 'Cartier selectat cu succes',
+      },
     });
+
+    response.cookies.set('has_neighborhood', 'true', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     return handleApiError(error);
   }

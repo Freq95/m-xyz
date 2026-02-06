@@ -8,11 +8,13 @@ import { ro } from 'date-fns/locale';
 import { ArrowLeft, MapPin, Calendar, MessageSquare, FileText, Settings } from 'lucide-react';
 import { Button, Card, Avatar, Skeleton } from '@/components/ui';
 import { PostCard } from '@/components/feed';
+import { BlockButton } from '@/components/shared';
 import type { PostCategory } from '@/lib/validations/post';
 
 interface UserProfile {
   id: string;
   name: string;
+  username?: string | null;
   avatarUrl: string | null;
   bio: string | null;
   joinedAt: string;
@@ -38,6 +40,9 @@ interface Post {
   isPinned: boolean;
   commentCount: number;
   viewCount: number;
+  likeCount: number;
+  isLiked: boolean;
+  isSaved: boolean;
   createdAt: string;
   author: {
     id: string;
@@ -62,7 +67,10 @@ interface CurrentUser {
 
 export default function ProfilePage() {
   const params = useParams();
-  const userId = params.id as string;
+  const idOrUsername = params.id as string;
+
+  // UUID regex to detect if param is UUID or username
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrUsername);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -97,7 +105,7 @@ export default function ProfilePage() {
       setError(null);
 
       try {
-        const response = await fetch(`/api/users/${userId}`);
+        const response = await fetch(`/api/users/${idOrUsername}`);
         const result = await response.json();
 
         if (!response.ok) {
@@ -112,14 +120,16 @@ export default function ProfilePage() {
       }
     }
 
-    if (userId) {
+    if (idOrUsername) {
       fetchProfile();
     }
-  }, [userId]);
+  }, [idOrUsername]);
 
-  // Fetch posts
+
+  // Fetch posts (must use resolved UUID, not username)
   const fetchPosts = useCallback(async (reset = true, currentCursor?: string) => {
-    if (!userId) return;
+    // Wait for profile to be loaded to get the actual UUID
+    if (!profile?.id) return;
 
     if (reset) {
       setIsLoadingPosts(true);
@@ -133,7 +143,7 @@ export default function ProfilePage() {
         params.append('cursor', currentCursor);
       }
 
-      const response = await fetch(`/api/users/${userId}/posts?${params}`);
+      const response = await fetch(`/api/users/${profile.id}/posts?${params}`);
       const result = await response.json();
 
       if (response.ok) {
@@ -151,14 +161,14 @@ export default function ProfilePage() {
       setIsLoadingPosts(false);
       setIsLoadingMore(false);
     }
-  }, [userId]);
+  }, [profile?.id]);
 
   useEffect(() => {
-    if (userId) {
+    if (profile?.id) {
       setCursor(undefined);
       fetchPosts(true);
     }
-  }, [userId, fetchPosts]);
+  }, [profile?.id, fetchPosts]);
 
   const handleLoadMore = () => {
     if (!isLoadingMore && hasMore && cursor) {
@@ -240,12 +250,15 @@ export default function ProfilePage() {
               </Button>
             </Link>
           ) : (
-            <Link href={`/messages/new?userId=${profile.id}`}>
-              <Button variant="outline" size="sm">
-                <MessageSquare className="w-4 h-4 mr-2" />
-                Trimite mesaj
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={`/messages/new?userId=${profile.id}`}>
+                <Button variant="outline" size="sm">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Trimite mesaj
+                </Button>
+              </Link>
+              <BlockButton userId={profile.id} variant="button" />
+            </div>
           )}
         </div>
       </header>

@@ -10,6 +10,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
+import { invalidateFeedCache } from '@/lib/redis/client';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -134,16 +135,31 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     // Soft delete comment and decrement post comment count in transaction
-    await prisma.$transaction([
-      prisma.comment.update({
-        where: { id },
+    // Use updateMany with status condition to prevent race condition
+    const [updatedComment] = await prisma.$transaction([
+      prisma.comment.updateMany({
+        where: {
+          id,
+          status: 'active', // Only update if still active (prevents double-decrement)
+        },
         data: { status: 'deleted' },
       }),
-      prisma.post.update({
-        where: { id: comment.postId },
+      prisma.post.updateMany({
+        where: {
+          id: comment.postId,
+          commentCount: { gt: 0 }, // Only decrement if count > 0 (prevents negative)
+        },
         data: { commentCount: { decrement: 1 } },
       }),
     ]);
+
+    // If no rows were updated, comment was already deleted
+    if (updatedComment.count === 0) {
+      throw new NotFoundError('Comentariul a fost deja șters');
+    }
+
+    // Invalidate feed cache (commentCount changed)
+    await invalidateFeedCache();
 
     return successResponse({ deleted: true });
   } catch (error) {

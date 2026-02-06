@@ -56,8 +56,14 @@ export async function uploadPostImage(
     throw new Error(validationError.error);
   }
 
-  // Generate unique filename
-  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  // Generate unique filename with validated extension
+  // Extract extension from MIME type instead of filename to prevent path traversal
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+  const fileExt = mimeToExt[file.type] || 'jpg';
   const fileName = `${userId}/${crypto.randomUUID()}.${fileExt}`;
 
   try {
@@ -162,7 +168,13 @@ export async function uploadAvatar(
   }
 
   // Generate filename in user's folder (required for RLS policy)
-  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+  // Extract extension from MIME type instead of filename to prevent path traversal
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+  const fileExt = mimeToExt[file.type] || 'jpg';
   const fileName = `${userId}/avatar.${fileExt}`;
 
   try {

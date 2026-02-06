@@ -6,6 +6,7 @@ import { NotFoundError, AuthorizationError, RateLimitError } from '@/lib/errors'
 import { messageQuerySchema } from '@/lib/validations/message';
 import { readRateLimit } from '@/lib/rate-limit';
 import { redis } from '@/lib/redis/client';
+import { isUserBlocked } from '@/lib/services/block.service';
 
 export async function GET(
   request: NextRequest,
@@ -44,6 +45,14 @@ export async function GET(
 
     if (conversation.userId1 !== user.id && conversation.userId2 !== user.id) {
       throw new AuthorizationError('Nu ai acces la această conversație');
+    }
+
+    // Check if either user has blocked the other
+    const otherUserId = conversation.userId1 === user.id ? conversation.userId2 : conversation.userId1;
+    const blocked = await isUserBlocked(user.id, otherUserId);
+
+    if (blocked) {
+      throw new NotFoundError('Conversația');
     }
 
     // Build cursor pagination (DESC order - newest first)

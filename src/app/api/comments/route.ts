@@ -9,10 +9,12 @@ import {
   NotFoundError,
 } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
-import { commentRateLimit } from '@/lib/rate-limit';
+import { commentRateLimit, readRateLimit } from '@/lib/rate-limit';
 import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
 import { notifyPostComment, notifyCommentReply } from '@/lib/services/notification.service';
+import { getBlockedUserIds, isUserBlocked } from '@/lib/services/block.service';
+import { invalidateFeedCache } from '@/lib/redis/client';
 
 /**
  * GET /api/comments - Get comments for a post
@@ -38,6 +40,23 @@ export async function GET(request: NextRequest) {
       throw new NotFoundError('Postarea');
     }
 
+    // Get current user and their blocked users (optional)
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Rate limiting for read operations (300 reads per minute)
+    if (readRateLimit && user?.id) {
+      const { success } = await readRateLimit.limit(user.id);
+      if (!success) {
+        throw new RateLimitError('Prea multe cereri. Încearcă din nou peste puțin.');
+      }
+    }
+
+    let blockedUserIds: string[] = [];
+    if (user) {
+      blockedUserIds = await getBlockedUserIds(user.id);
+    }
+
     // Build cursor condition for pagination
     let cursorCondition = {};
     if (query.cursor) {
@@ -56,6 +75,9 @@ export async function GET(request: NextRequest) {
         postId: query.postId,
         parentId: null,
         status: 'active',
+        ...(blockedUserIds.length > 0 && {
+          authorId: { notIn: blockedUserIds },
+        }),
         ...cursorCondition,
       },
       orderBy: { createdAt: 'asc' },
@@ -70,7 +92,12 @@ export async function GET(request: NextRequest) {
           },
         },
         replies: {
-          where: { status: 'active' },
+          where: {
+            status: 'active',
+            ...(blockedUserIds.length > 0 && {
+              authorId: { notIn: blockedUserIds },
+            }),
+          },
           orderBy: { createdAt: 'asc' },
           take: 3, // Show first 3 replies
           include: {
@@ -184,6 +211,14 @@ export async function POST(request: NextRequest) {
       throw new NotFoundError('Postarea');
     }
 
+    // Check if there's a block relationship between commenter and post author
+    if (post.authorId !== user.id) {
+      const blocked = await isUserBlocked(user.id, post.authorId);
+      if (blocked) {
+        throw new AuthorizationError('Nu poți comenta pe această postare');
+      }
+    }
+
     // If replying, check if parent comment exists
     let parentCommentAuthorId: string | null = null;
     if (validatedData.parentId) {
@@ -236,6 +271,9 @@ export async function POST(request: NextRequest) {
         data: { commentCount: { increment: 1 } },
       }),
     ]);
+
+    // Invalidate feed cache (commentCount changed)
+    await invalidateFeedCache();
 
     // Create notifications (fire and forget, don't block response)
     const commenterName = dbUser.displayName || dbUser.fullName;

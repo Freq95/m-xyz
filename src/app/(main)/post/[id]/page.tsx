@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { Button, Card, Avatar, Textarea, Skeleton } from '@/components/ui';
 import { ConfirmModal, useToast } from '@/components/shared';
-import { PostForm } from '@/components/feed';
+import { PostForm, LikeButton } from '@/components/feed';
 import type { PostCategory } from '@/lib/validations/post';
 
 interface Post {
@@ -36,6 +36,8 @@ interface Post {
   status: string;
   commentCount: number;
   viewCount: number;
+  likeCount: number;
+  isLiked: boolean;
   createdAt: string;
   updatedAt: string;
   author: {
@@ -676,6 +678,11 @@ export default function PostDetailPage() {
 
               {/* Stats */}
               <div className="flex items-center gap-4 text-muted-foreground">
+                <LikeButton
+                  postId={post.id}
+                  initialLiked={post.isLiked}
+                  initialCount={post.likeCount}
+                />
                 <div className="flex items-center gap-1.5">
                   <MessageCircle className="w-4 h-4" />
                   <span className="text-xs">{post.commentCount} comentarii</span>

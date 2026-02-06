@@ -8,6 +8,7 @@ import { sanitizeText } from '@/lib/sanitize';
 import { sendMessageSchema } from '@/lib/validations/message';
 import { messageRateLimit } from '@/lib/rate-limit';
 import { redis } from '@/lib/redis/client';
+import { isUserBlocked } from '@/lib/services/block.service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,6 +70,13 @@ export async function POST(request: NextRequest) {
 
     if (!sender) {
       throw new NotFoundError('Utilizatorul');
+    }
+
+    // Check if either user has blocked the other
+    const blocked = await isUserBlocked(user.id, validatedData.recipientId);
+
+    if (blocked) {
+      throw new AuthorizationError('Nu poți trimite mesaje către acest utilizator');
     }
 
     // Create message and conversation in a single transaction

@@ -24,6 +24,7 @@ export function NotificationBell() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -58,9 +59,34 @@ export function NotificationBell() {
 
     fetchUnreadCount();
 
-    // Poll every 30 seconds for new notifications
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
+    // Set initial polling interval (30 seconds when visible)
+    intervalRef.current = setInterval(fetchUnreadCount, 30000);
+
+    // Adjust polling based on tab visibility
+    const handleVisibilityChange = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+
+      if (document.hidden) {
+        // Reduce polling to 2 minutes when tab is hidden
+        intervalRef.current = setInterval(fetchUnreadCount, 120000);
+      } else {
+        // Resume normal 30-second polling when tab is visible
+        intervalRef.current = setInterval(fetchUnreadCount, 30000);
+        // Fetch immediately when tab becomes visible
+        fetchUnreadCount();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Fetch notifications when dropdown opens

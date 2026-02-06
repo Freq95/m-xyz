@@ -5,10 +5,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import { ro } from 'date-fns/locale';
-import { MessageCircle, MoreHorizontal, Eye, Bookmark, Share2, Flag, Link as LinkIcon } from 'lucide-react';
+import { MessageCircle, MoreHorizontal, Eye, Bookmark, Share2, Flag, Link as LinkIcon, Ban } from 'lucide-react';
 import { Button, Card, Avatar } from '@/components/ui';
 import { getImagePlaceholder } from '@/lib/utils';
+import { getProfileUrl } from '@/lib/utils/profile';
 import type { PostCategory } from '@/lib/validations/post';
+import { LikeButton } from './like-button';
 
 interface PostCardProps {
   post: {
@@ -23,10 +25,14 @@ interface PostCardProps {
     status?: string;
     commentCount: number;
     viewCount: number;
+    likeCount: number;
+    isLiked: boolean;
+    isSaved: boolean;
     createdAt: string;
     author: {
       id: string;
       name: string;
+      username?: string | null;
       avatarUrl: string | null;
     };
     images: Array<{
@@ -74,7 +80,9 @@ export function PostCard({ post }: PostCardProps) {
           {/* Header */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm">{post.author.name}</span>
+              <Link href={getProfileUrl(post.author)} className="font-semibold text-sm hover:underline">
+                {post.author.name}
+              </Link>
               <span className="text-xs text-muted-foreground">{timeAgo}</span>
               {post.isPinned && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
@@ -82,7 +90,7 @@ export function PostCard({ post }: PostCardProps) {
                 </span>
               )}
             </div>
-            <PostCardMenu postId={post.id} />
+            <PostCardMenu postId={post.id} authorId={post.author.id} />
           </div>
 
           {/* Category Badge */}
@@ -169,6 +177,11 @@ export function PostCard({ post }: PostCardProps) {
           {/* Actions */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <LikeButton
+                postId={post.id}
+                initialLiked={post.isLiked}
+                initialCount={post.likeCount}
+              />
               <Link
                 href={`/post/${post.id}`}
                 className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
@@ -181,7 +194,7 @@ export function PostCard({ post }: PostCardProps) {
                 <span className="text-xs">{post.viewCount}</span>
               </div>
             </div>
-            <SaveButton postId={post.id} />
+            <SaveButton postId={post.id} initialSaved={post.isSaved} />
           </div>
         </div>
       </div>
@@ -189,13 +202,31 @@ export function PostCard({ post }: PostCardProps) {
   );
 }
 
-function PostCardMenu({ postId }: { postId: string }) {
+function PostCardMenu({ postId, authorId }: { postId: string; authorId: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [isReporting, setIsReporting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Fetch current user ID on mount
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch('/api/user/profile');
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentUserId(data.data?.id);
+        }
+      } catch (err) {
+        // User not logged in or error
+      }
+    };
+    fetchCurrentUser();
+  }, []);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -290,6 +321,27 @@ function PostCardMenu({ postId }: { postId: string }) {
     }
   };
 
+  const handleBlock = async () => {
+    setIsBlocking(true);
+    try {
+      const response = await fetch(`/api/users/${authorId}/block`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.ok) {
+        // Close menu and optionally refresh feed
+        setIsOpen(false);
+        // Refresh page to remove blocked user's posts
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error('Failed to block user:', err);
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
   return (
     <div className="relative" ref={menuRef}>
       <Button
@@ -328,6 +380,16 @@ function PostCardMenu({ postId }: { postId: string }) {
             <Flag className="w-4 h-4" />
             <span>Raportează</span>
           </button>
+          {currentUserId && currentUserId !== authorId && (
+            <button
+              onClick={handleBlock}
+              disabled={isBlocking}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-muted transition-colors text-destructive disabled:opacity-50"
+            >
+              <Ban className="w-4 h-4" />
+              <span>{isBlocking ? 'Blochez...' : 'Blochează utilizatorul'}</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -375,31 +437,14 @@ function PostCardMenu({ postId }: { postId: string }) {
   );
 }
 
-function SaveButton({ postId, initialSaved }: { postId: string; initialSaved?: boolean }) {
-  const [isSaved, setIsSaved] = useState(initialSaved ?? false);
+function SaveButton({ postId, initialSaved }: { postId: string; initialSaved: boolean }) {
+  const [isSaved, setIsSaved] = useState(initialSaved);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasFetched, setHasFetched] = useState(initialSaved !== undefined);
 
-  // Fetch initial saved state if not provided
+  // Sync with prop changes (e.g., when navigating between pages)
   useEffect(() => {
-    if (hasFetched) return;
-
-    const checkSavedStatus = async () => {
-      try {
-        const response = await fetch(`/api/posts/${postId}/save`);
-        if (response.ok) {
-          const result = await response.json();
-          setIsSaved(result.data?.saved ?? false);
-        }
-      } catch (err) {
-        console.error('Failed to check saved status:', err);
-      } finally {
-        setHasFetched(true);
-      }
-    };
-
-    checkSavedStatus();
-  }, [postId, hasFetched]);
+    setIsSaved(initialSaved);
+  }, [initialSaved]);
 
   const handleToggleSave = async () => {
     // Optimistic update - update UI immediately

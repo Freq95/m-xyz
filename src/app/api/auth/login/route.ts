@@ -30,7 +30,19 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.toLowerCase();
 
-    // Find user in our database
+    // Authenticate with Supabase Auth first (prevents user enumeration)
+    const supabase = await createClient();
+    const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+    // Return generic error for failed authentication (prevents user enumeration)
+    if (signInError || !authData.user) {
+      throw new AuthenticationError('Email sau parolă incorectă');
+    }
+
+    // Find user in our database (only after successful Supabase auth)
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: {
@@ -46,27 +58,19 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
+      // User exists in Supabase but not in our DB (should not happen)
       throw new AuthenticationError('Email sau parolă incorectă');
     }
 
-    // Check if banned
+    // Check if banned (separate error after auth succeeds, prevents timing attacks)
     if (user.isBanned) {
+      // Log the ban check server-side only
+      console.warn(`Banned user login attempt: ${user.email}`);
       throw new AuthenticationError(
         user.bannedReason
           ? `Contul tău a fost suspendat: ${user.bannedReason}`
           : 'Contul tău a fost suspendat'
       );
-    }
-
-    // Authenticate with Supabase Auth (creates session)
-    const supabase = await createClient();
-    const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    });
-
-    if (signInError || !authData.user) {
-      throw new AuthenticationError('Email sau parolă incorectă');
     }
 
     // Update last active timestamp

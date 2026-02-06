@@ -4,6 +4,9 @@ import { searchQuerySchema } from '@/lib/validations/post';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
 import { NotFoundError, RateLimitError } from '@/lib/errors';
 import { searchRateLimit, getClientIp } from '@/lib/rate-limit';
+import { createClient } from '@/lib/supabase/server';
+import { getBlockedUserIds } from '@/lib/services/block.service';
+import { redis, CACHE_TTL } from '@/lib/redis/client';
 
 /**
  * GET /api/search - Search posts in a neighborhood
@@ -22,6 +25,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
 
+    // Get authenticated user (optional for search)
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+
+    // Get list of blocked user IDs (if authenticated) - uses Redis cache
+    const blockedUserIds = userId ? await getBlockedUserIds(userId) : [];
+
     // Parse and validate query parameters
     const query = searchQuerySchema.parse({
       q: searchParams.get('q'),
@@ -31,13 +42,30 @@ export async function GET(request: NextRequest) {
       limit: searchParams.get('limit') || 20,
     });
 
-    // Find neighborhood by slug
+    // Find neighborhood by slug (only select ID for filtering)
     const neighborhood = await prisma.neighborhood.findUnique({
       where: { slug: query.neighborhood },
+      select: { id: true },
     });
 
     if (!neighborhood) {
       throw new NotFoundError('Cartierul');
+    }
+
+    // Build cache key for search (only cache page 1, anonymous users)
+    const shouldCache = redis && !query.cursor && !userId;
+    const cacheKey = shouldCache
+      ? `search:${query.neighborhood}:${query.category || 'all'}:${query.q}`
+      : null;
+
+    // Check cache
+    if (shouldCache && cacheKey && redis) {
+      const cached = await redis.get(cacheKey) as { data: any; meta?: any } | null;
+      if (cached && cached.data) {
+        console.log('✓ SEARCH CACHE HIT:', cacheKey);
+        return successResponse(cached.data, cached.meta || {});
+      }
+      console.log('✗ SEARCH CACHE MISS:', cacheKey);
     }
 
     // Build cursor condition for pagination
@@ -60,6 +88,9 @@ export async function GET(request: NextRequest) {
         neighborhoodId: neighborhood.id,
         status: 'active',
         ...(query.category && { category: query.category }),
+        ...(blockedUserIds.length > 0 && {
+          authorId: { notIn: blockedUserIds },
+        }),
         ...cursorCondition,
         OR: [
           { title: { contains: query.q, mode: 'insensitive' } },
@@ -84,13 +115,6 @@ export async function GET(request: NextRequest) {
           orderBy: { position: 'asc' },
           take: 4,
         },
-        _count: {
-          select: {
-            comments: {
-              where: { status: 'active' },
-            },
-          },
-        },
       },
     });
 
@@ -99,8 +123,8 @@ export async function GET(request: NextRequest) {
     const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
     const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1]?.id : undefined;
 
-    return successResponse(
-      postsToReturn.map((post) => ({
+    // Format response data
+    const responseData = postsToReturn.map((post) => ({
         id: post.id,
         title: post.title,
         body: post.body,
@@ -109,7 +133,7 @@ export async function GET(request: NextRequest) {
         currency: post.currency,
         isFree: post.isFree,
         isPinned: post.isPinned,
-        commentCount: post._count.comments,
+        commentCount: post.commentCount,
         viewCount: post.viewCount,
         createdAt: post.createdAt,
         author: {
@@ -122,9 +146,18 @@ export async function GET(request: NextRequest) {
           url: img.url,
           thumbnailUrl: img.thumbnailUrl,
         })),
-      })),
-      { cursor: nextCursor, hasMore }
-    );
+      }));
+
+    // Store in cache (5 minute TTL for search results)
+    if (shouldCache && cacheKey && redis) {
+      const cacheData = {
+        data: responseData,
+        meta: { cursor: nextCursor, hasMore }
+      };
+      await redis.set(cacheKey, cacheData, { ex: 300 }); // 5 minutes
+    }
+
+    return successResponse(responseData, { cursor: nextCursor, hasMore });
   } catch (error) {
     return handleApiError(error);
   }

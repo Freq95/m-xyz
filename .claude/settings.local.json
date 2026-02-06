@@ -60,7 +60,11 @@
       "Bash(grep:*)",
       "Bash(wc:*)",
       "Bash(timeout:*)",
-      "Bash(node scripts/migrate-username.js:*)"
+      "Bash(node scripts/migrate-username.js:*)",
+      "Bash(exit 0)",
+      "Bash(set:*)",
+      "Bash(npx prisma db pull:*)",
+      "Bash(clip:*)"
     ]
   }
 }

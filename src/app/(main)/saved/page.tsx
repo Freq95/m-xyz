@@ -19,6 +19,9 @@ interface Post {
   isPinned: boolean;
   commentCount: number;
   viewCount: number;
+  likeCount: number;
+  isLiked: boolean;
+  isSaved: boolean;
   createdAt: string;
   savedAt: string;
   author: {

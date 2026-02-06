@@ -6,6 +6,7 @@ import { conversationQuerySchema } from '@/lib/validations/message';
 import { readRateLimit } from '@/lib/rate-limit';
 import { RateLimitError } from '@/lib/errors';
 import { redis } from '@/lib/redis/client';
+import { getBidirectionalBlockedUserIds } from '@/lib/services/block.service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,6 +38,9 @@ export async function GET(request: NextRequest) {
         return successResponse(data.data, data.meta);
       }
     }
+
+    // Get list of blocked users (both directions - users I blocked and users who blocked me)
+    const blockedUserIds = await getBidirectionalBlockedUserIds(user.id);
 
     // Build cursor pagination
     let cursorCondition = {};
@@ -78,9 +82,15 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Filter out conversations with blocked users
+    const filteredConversations = conversations.filter((convo: any) => {
+      const otherUserId = convo.userId1 === user.id ? convo.userId2 : convo.userId1;
+      return !blockedUserIds.has(otherUserId);
+    });
+
     // Check pagination
-    const hasMore = conversations.length > query.limit;
-    const conversationsToReturn = hasMore ? conversations.slice(0, -1) : conversations;
+    const hasMore = filteredConversations.length > query.limit;
+    const conversationsToReturn = hasMore ? filteredConversations.slice(0, -1) : filteredConversations;
     const nextCursor = hasMore ? conversationsToReturn[conversationsToReturn.length - 1]?.id : undefined;
 
     // Format response
@@ -106,16 +116,19 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Calculate total unread count across all conversations
+    const totalUnreadCount = formatted.reduce((sum: number, convo: any) => sum + convo.unreadCount, 0);
+
     // Cache the result for 30 seconds (first page only)
     if (cacheKey && redis) {
       // Upstash Redis auto-serializes objects, no need for JSON.stringify
       await redis.set(cacheKey, {
         data: formatted,
-        meta: { cursor: nextCursor, hasMore },
+        meta: { cursor: nextCursor, hasMore, totalUnreadCount },
       }, { ex: 30 });
     }
 
-    return successResponse(formatted, { cursor: nextCursor, hasMore });
+    return successResponse(formatted, { cursor: nextCursor, hasMore, totalUnreadCount });
   } catch (error) {
     return handleApiError(error);
   }

@@ -52,6 +52,9 @@ model User {
   handledReports Report[]      @relation("Handler")
   notifications Notification[]
   savedPosts    SavedPost[]
+  likedPosts    PostLike[]
+  blockedUsers  BlockedUser[]  @relation("BlockedUsers")
+  blockedBy     BlockedUser[]  @relation("BlockedByUsers")
   auditLogs     AuditLog[]
   conversationsAsUser1 Conversation[]   @relation("ConversationUser1")
   conversationsAsUser2 Conversation[]   @relation("ConversationUser2")
@@ -120,6 +123,7 @@ model Post {
   // Engagement
   commentCount Int @default(0) @map("comment_count")
   viewCount    Int @default(0) @map("view_count")
+  likeCount    Int @default(0) @map("like_count")
 
   // Timestamps
   createdAt DateTime  @default(now()) @map("created_at")
@@ -130,6 +134,7 @@ model Post {
   images     PostImage[]
   comments   Comment[]
   savedBy    SavedPost[]
+  likedBy    PostLike[]
 
   @@index([neighborhoodId, status, createdAt(sort: Desc)])
   @@index([neighborhoodId, status, category, createdAt(sort: Desc)])
@@ -247,6 +252,36 @@ model SavedPost {
   @@unique([userId, postId])
   @@index([userId, createdAt(sort: Desc)])
   @@map("saved_posts")
+}
+
+model PostLike {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId String @map("post_id")
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([postId, createdAt(sort: Desc)])
+  @@map("post_likes")
+}
+
+model BlockedUser {
+  id         String @id @default(uuid())
+  blockerId  String @map("blocker_id")
+  blocker    User   @relation("BlockedUsers", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId  String @map("blocked_id")
+  blocked    User   @relation("BlockedByUsers", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+  @@map("blocked_users")
 }
 
 // ============================================

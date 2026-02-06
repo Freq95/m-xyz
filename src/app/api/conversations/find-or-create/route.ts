@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma/client';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
 import { NotFoundError } from '@/lib/errors';
 import { z } from 'zod';
+import { isUserBlocked } from '@/lib/services/block.service';
 
 const querySchema = z.object({
   userId: z.string().uuid('ID utilizator invalid'),
@@ -30,6 +31,13 @@ export async function GET(request: NextRequest) {
     });
 
     if (!otherUser || otherUser.isBanned) {
+      throw new NotFoundError('Utilizatorul');
+    }
+
+    // Check if either user has blocked the other
+    const blocked = await isUserBlocked(user.id, validated.userId);
+
+    if (blocked) {
       throw new NotFoundError('Utilizatorul');
     }
 

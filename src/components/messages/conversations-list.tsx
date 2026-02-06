@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { ro } from 'date-fns/locale';
@@ -35,16 +35,45 @@ export function ConversationsList({ activeConversationId }: ConversationsListPro
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const toast = useToast();
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchConversations(true);
 
-    // Poll for conversation updates every 10 seconds
-    const interval = setInterval(() => {
+    // Poll for conversation updates every 10 seconds (when visible)
+    intervalRef.current = setInterval(() => {
       pollConversations();
     }, 10000);
 
-    return () => clearInterval(interval);
+    // Adjust polling based on tab visibility
+    const handleVisibilityChange = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+
+      if (document.hidden) {
+        // Reduce polling to 2 minutes when tab is hidden
+        intervalRef.current = setInterval(() => {
+          pollConversations();
+        }, 120000);
+      } else {
+        // Resume normal 10-second polling when tab is visible
+        intervalRef.current = setInterval(() => {
+          pollConversations();
+        }, 10000);
+        // Poll immediately when tab becomes visible
+        pollConversations();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const fetchConversations = async (reset = true) => {
@@ -66,7 +95,9 @@ export function ConversationsList({ activeConversationId }: ConversationsListPro
         toast.error(result.error || 'Nu s-au putut încărca conversațiile');
       }
     } catch (err) {
-      console.error('Failed to fetch conversations:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to fetch conversations:', err);
+      }
       toast.error('A apărut o eroare');
     } finally {
       setIsLoading(false);
@@ -87,7 +118,9 @@ export function ConversationsList({ activeConversationId }: ConversationsListPro
       }
     } catch (err) {
       // Silent fail for polling
-      console.error('Polling conversations failed:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Polling conversations failed:', err);
+      }
     }
   };
 

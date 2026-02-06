@@ -274,9 +274,11 @@ export function PostForm({ onSuccess, onCancel, editMode = false, postId, initia
             >
               <X className="w-4 h-4" />
             </button>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {(selectedImage!.size / 1024).toFixed(1)} KB
-            </p>
+            {selectedImage && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {(selectedImage.size / 1024).toFixed(1)} KB
+              </p>
+            )}
           </div>
         ) : (
           <div>

@@ -85,8 +85,12 @@ export async function middleware(request: NextRequest) {
 
   // Handle authenticated users
   if (user) {
-    // Check user's neighborhood from metadata
-    const hasNeighborhood = !!user.user_metadata?.neighborhoodId;
+    // Check if user has completed onboarding
+    // We use both JWT metadata AND a custom cookie for reliability
+    // The cookie is set by the select-neighborhood API endpoint and provides immediate feedback
+    const hasNeighborhoodInMetadata = !!user.user_metadata?.neighborhoodId;
+    const hasNeighborhoodCookie = request.cookies.has('has_neighborhood');
+    const hasNeighborhood = hasNeighborhoodInMetadata || hasNeighborhoodCookie;
 
     // Redirect to onboarding if trying to access protected routes without neighborhood
     if (isProtectedRoute && !hasNeighborhood) {

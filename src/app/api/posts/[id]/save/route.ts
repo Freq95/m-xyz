@@ -1,45 +1,10 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma/client';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
-import { AuthenticationError, AuthorizationError, NotFoundError, RateLimitError } from '@/lib/errors';
-import { createClient } from '@/lib/supabase/server';
+import { AuthorizationError, NotFoundError, RateLimitError } from '@/lib/errors';
+import { getAuthUser } from '@/lib/auth';
 import { validateOrigin } from '@/lib/csrf';
 import { saveRateLimit } from '@/lib/rate-limit';
-
-/**
- * GET /api/posts/[id]/save - Check if post is saved by current user
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: postId } = await params;
-
-    // Get authenticated user
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      // Not authenticated - return not saved
-      return successResponse({ saved: false });
-    }
-
-    // Check if saved
-    const savedPost = await prisma.savedPost.findUnique({
-      where: {
-        userId_postId: {
-          userId: user.id,
-          postId,
-        },
-      },
-    });
-
-    return successResponse({ saved: !!savedPost });
-  } catch (error) {
-    return handleApiError(error);
-  }
-}
 
 /**
  * POST /api/posts/[id]/save - Save/bookmark a post
@@ -57,12 +22,7 @@ export async function POST(
     }
 
     // Get authenticated user
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      throw new AuthenticationError();
-    }
+    const user = await getAuthUser();
 
     // Check rate limit
     if (saveRateLimit) {
@@ -126,12 +86,7 @@ export async function DELETE(
     }
 
     // Get authenticated user
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      throw new AuthenticationError();
-    }
+    const user = await getAuthUser();
 
     // Check rate limit
     if (saveRateLimit) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ro } from 'date-fns/locale';
@@ -47,18 +47,54 @@ export default function ConversationPage() {
   const shouldAutoScrollRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Memoized character counter display
+  const characterCounter = useMemo(() => {
+    const length = messageBody.length;
+    if (length <= 400) return null;
+
+    const isNearLimit = length >= 480;
+    return {
+      text: `${length}/500`,
+      className: isNearLimit ? 'text-red-500 font-semibold' : 'text-muted-foreground',
+    };
+  }, [messageBody.length]);
+
   useEffect(() => {
     fetchMessages(true);
 
-    // Start polling for new messages every 5 seconds
+    // Start polling for new messages every 5 seconds (when visible)
     pollingIntervalRef.current = setInterval(() => {
       pollNewMessages();
     }, 5000);
+
+    // Adjust polling based on tab visibility
+    const handleVisibilityChange = () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+
+      if (document.hidden) {
+        // Reduce polling to 2 minutes when tab is hidden
+        pollingIntervalRef.current = setInterval(() => {
+          pollNewMessages();
+        }, 120000);
+      } else {
+        // Resume normal 5-second polling when tab is visible
+        pollingIntervalRef.current = setInterval(() => {
+          pollNewMessages();
+        }, 5000);
+        // Poll immediately when tab becomes visible
+        pollNewMessages();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [conversationId]);
 
@@ -132,7 +168,9 @@ export default function ConversationPage() {
         router.push('/messages');
       }
     } catch (err) {
-      console.error('Failed to fetch messages:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to fetch messages:', err);
+      }
       toast.error('A apărut o eroare');
     } finally {
       setIsLoading(false);
@@ -190,7 +228,9 @@ export default function ConversationPage() {
       }
     } catch (err) {
       // Silent fail for polling - don't show error toast
-      console.error('Polling failed:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Polling failed:', err);
+      }
     }
   };
 
@@ -236,7 +276,9 @@ export default function ConversationPage() {
         setMessageBody(tempBody); // Restore message on error
       }
     } catch (err) {
-      console.error('Failed to send message:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to send message:', err);
+      }
       toast.error('A apărut o eroare');
       setMessageBody(tempBody); // Restore message on error
     } finally {
@@ -357,13 +399,11 @@ export default function ConversationPage() {
                     maxLength={500}
                     onKeyDown={handleKeyDown}
                   />
-                  {messageBody.length > 400 && (
+                  {characterCounter && (
                     <span
-                      className={`absolute right-2 bottom-2 text-xs pointer-events-none ${
-                        messageBody.length >= 480 ? 'text-red-500 font-semibold' : 'text-muted-foreground'
-                      }`}
+                      className={`absolute right-2 bottom-2 text-xs pointer-events-none ${characterCounter.className}`}
                     >
-                      {messageBody.length}/500
+                      {characterCounter.text}
                     </span>
                   )}
                 </div>

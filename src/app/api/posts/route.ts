@@ -9,11 +9,12 @@ import {
   NotFoundError,
 } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
-import { postRateLimit } from '@/lib/rate-limit';
+import { postRateLimit, readRateLimit } from '@/lib/rate-limit';
 import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
 import { redis, CACHE_KEYS, CACHE_TTL, invalidateFeedCache } from '@/lib/redis/client';
 import { uploadPostImage, deletePostImage } from '@/lib/supabase/storage';
+import { getBlockedUserIds } from '@/lib/services/block.service';
 
 /**
  * GET /api/posts - Get posts feed for a neighborhood
@@ -21,6 +22,22 @@ import { uploadPostImage, deletePostImage } from '@/lib/supabase/storage';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+
+    // Get authenticated user (optional for feed)
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+
+    // Rate limiting for read operations (300 reads per minute)
+    if (readRateLimit && userId) {
+      const { success } = await readRateLimit.limit(userId);
+      if (!success) {
+        throw new RateLimitError('Prea multe cereri. Încearcă din nou peste puțin.');
+      }
+    }
+
+    // Get list of blocked user IDs (if authenticated) - uses Redis cache
+    const blockedUserIds = userId ? await getBlockedUserIds(userId) : [];
 
     // Parse and validate query parameters
     const query = postQuerySchema.parse({
@@ -31,8 +48,9 @@ export async function GET(request: NextRequest) {
       limit: searchParams.get('limit') || 20,
     });
 
-    // Only cache first page (no cursor)
-    const shouldCache = redis && !query.cursor;
+    // Only cache first page (no cursor) and when not authenticated
+    // (liked status is user-specific, so don't cache for authenticated users)
+    const shouldCache = redis && !query.cursor && !userId;
     const cacheKey = shouldCache
       ? CACHE_KEYS.FEED({
           neighborhoodSlug: query.neighborhood,
@@ -49,9 +67,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Find neighborhood by slug
+    // Find neighborhood by slug (only select ID for filtering)
     const neighborhood = await prisma.neighborhood.findUnique({
       where: { slug: query.neighborhood },
+      select: { id: true },
     });
 
     if (!neighborhood) {
@@ -80,6 +99,9 @@ export async function GET(request: NextRequest) {
           category: 'SELL',
           isFree: true,
         }),
+        ...(blockedUserIds.length > 0 && {
+          authorId: { notIn: blockedUserIds },
+        }),
         ...cursorCondition,
       },
       orderBy: [
@@ -93,19 +115,13 @@ export async function GET(request: NextRequest) {
             id: true,
             fullName: true,
             displayName: true,
+            username: true,
             avatarUrl: true,
           },
         },
         images: {
           orderBy: { position: 'asc' },
           take: 4, // Max 4 images per post preview
-        },
-        _count: {
-          select: {
-            comments: {
-              where: { status: 'active' },
-            },
-          },
         },
       },
     });
@@ -114,6 +130,30 @@ export async function GET(request: NextRequest) {
     const hasMore = posts.length > query.limit;
     const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
     const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1]?.id : undefined;
+
+    // Check which posts the current user has liked and saved (if authenticated)
+    let likedPostIds = new Set<string>();
+    let savedPostIds = new Set<string>();
+    if (userId && postsToReturn.length > 0) {
+      const [likes, saved] = await Promise.all([
+        prisma.postLike.findMany({
+          where: {
+            userId,
+            postId: { in: postsToReturn.map(p => p.id) },
+          },
+          select: { postId: true },
+        }),
+        prisma.savedPost.findMany({
+          where: {
+            userId,
+            postId: { in: postsToReturn.map(p => p.id) },
+          },
+          select: { postId: true },
+        }),
+      ]);
+      likedPostIds = new Set(likes.map(like => like.postId));
+      savedPostIds = new Set(saved.map(save => save.postId));
+    }
 
     // Format response data
     const responseData = postsToReturn.map((post) => ({
@@ -126,8 +166,11 @@ export async function GET(request: NextRequest) {
       isFree: post.isFree,
       isPinned: post.isPinned,
       status: post.status,
-      commentCount: post._count.comments,
+      commentCount: post.commentCount,
       viewCount: post.viewCount,
+      likeCount: post.likeCount,
+      isLiked: likedPostIds.has(post.id),
+      isSaved: savedPostIds.has(post.id),
       createdAt: post.createdAt,
       author: {
         id: post.author.id,

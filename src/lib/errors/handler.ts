@@ -13,6 +13,8 @@ interface ApiResponse<T = unknown> {
   meta?: {
     cursor?: string;
     hasMore?: boolean;
+    totalUnreadCount?: number;
+    [key: string]: any; // Allow additional meta fields
   };
 }
 
@@ -21,7 +23,7 @@ interface ApiResponse<T = unknown> {
  */
 export function successResponse<T>(
   data: T,
-  meta?: { cursor?: string; hasMore?: boolean }
+  meta?: { cursor?: string; hasMore?: boolean; totalUnreadCount?: number; [key: string]: any }
 ): NextResponse<ApiResponse<T>> {
   return NextResponse.json({ data, ...(meta && { meta }) });
 }

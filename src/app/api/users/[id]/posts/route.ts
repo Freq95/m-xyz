@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma/client';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
 import { NotFoundError } from '@/lib/errors';
+import { createClient } from '@/lib/supabase/server';
+import { isUserBlocked } from '@/lib/services/block.service';
 import { z } from 'zod';
 
 const userPostsQuerySchema = z.object({
@@ -39,6 +41,18 @@ export async function GET(
       throw new NotFoundError('Utilizatorul');
     }
 
+    // Get current user (optional - for block check)
+    const supabase = await createClient();
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+    // Check if there's a block relationship (either direction)
+    if (currentUser && currentUser.id !== user.id) {
+      const blocked = await isUserBlocked(currentUser.id, user.id);
+      if (blocked) {
+        throw new NotFoundError('Utilizatorul');
+      }
+    }
+
     // Build cursor condition for pagination
     let cursorCondition = {};
     if (query.cursor) {
@@ -66,6 +80,7 @@ export async function GET(
             id: true,
             fullName: true,
             displayName: true,
+            username: true,
             avatarUrl: true,
           },
         },
@@ -80,13 +95,6 @@ export async function GET(
           orderBy: { position: 'asc' },
           take: 4,
         },
-        _count: {
-          select: {
-            comments: {
-              where: { status: 'active' },
-            },
-          },
-        },
       },
     });
 
@@ -94,6 +102,30 @@ export async function GET(
     const hasMore = posts.length > query.limit;
     const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
     const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1]?.id : undefined;
+
+    // Check which posts the current user has liked and saved (reuse currentUser from block check above)
+    let likedPostIds = new Set<string>();
+    let savedPostIds = new Set<string>();
+    if (currentUser && postsToReturn.length > 0) {
+      const [likes, saved] = await Promise.all([
+        prisma.postLike.findMany({
+          where: {
+            userId: currentUser.id,
+            postId: { in: postsToReturn.map(p => p.id) },
+          },
+          select: { postId: true },
+        }),
+        prisma.savedPost.findMany({
+          where: {
+            userId: currentUser.id,
+            postId: { in: postsToReturn.map(p => p.id) },
+          },
+          select: { postId: true },
+        }),
+      ]);
+      likedPostIds = new Set(likes.map(like => like.postId));
+      savedPostIds = new Set(saved.map(save => save.postId));
+    }
 
     return successResponse(
       postsToReturn.map((post) => ({
@@ -105,8 +137,11 @@ export async function GET(
         currency: post.currency,
         isFree: post.isFree,
         isPinned: post.isPinned,
-        commentCount: post._count.comments,
+        commentCount: post.commentCount,
         viewCount: post.viewCount,
+        likeCount: post.likeCount,
+        isLiked: likedPostIds.has(post.id),
+        isSaved: savedPostIds.has(post.id),
         createdAt: post.createdAt,
         author: {
           id: post.author.id,

@@ -2,7 +2,6 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-// import { useVirtualizer } from '@tanstack/react-virtual';
 import { PostCard, EmptyState } from '@/components/feed';
 import type { PostCategory } from '@/lib/validations/post';
 
@@ -18,6 +17,9 @@ interface Post {
   status: string;
   commentCount: number;
   viewCount: number;
+  likeCount: number;
+  isLiked: boolean;
+  isSaved: boolean;
   createdAt: string;
   author: {
     id: string;
@@ -67,15 +69,6 @@ export function FeedClient({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isPending, startTransition] = useTransition();
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  // const parentRef = useRef<HTMLDivElement>(null);
-
-  // Virtual scrolling for posts list (commented out - package installation issue)
-  // const virtualizer = useVirtualizer({
-  //   count: posts.length,
-  //   getScrollElement: () => parentRef.current,
-  //   estimateSize: () => 350, // Estimated height of a PostCard
-  //   overscan: 3, // Render 3 items above and below viewport
-  // });
 
   // Reset state when category changes (props update)
   useEffect(() => {
