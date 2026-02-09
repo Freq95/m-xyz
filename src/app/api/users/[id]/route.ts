@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma/client';
 import { handleApiError, successResponse } from '@/lib/errors/handler';
 import { NotFoundError } from '@/lib/errors';
+import { createClient } from '@/lib/supabase/server';
+import { isUserBlocked } from '@/lib/services/block.service';
 
 /**
  * GET /api/users/[id] - Get public user profile by ID or username
@@ -48,6 +50,17 @@ export async function GET(
 
     if (!user) {
       throw new NotFoundError('Utilizatorul');
+    }
+
+    // Check if there's a block relationship between current user and profile user
+    const supabase = await createClient();
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+    if (currentUser && currentUser.id !== user.id) {
+      const blocked = await isUserBlocked(currentUser.id, user.id);
+      if (blocked) {
+        throw new NotFoundError('Utilizatorul');
+      }
     }
 
     return successResponse({

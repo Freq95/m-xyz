@@ -64,7 +64,8 @@
       "Bash(exit 0)",
       "Bash(set:*)",
       "Bash(npx prisma db pull:*)",
-      "Bash(clip:*)"
+      "Bash(clip:*)",
+      "Bash(node scripts/migrations/add-calendar-indexes.js:*)"
     ]
   }
 }

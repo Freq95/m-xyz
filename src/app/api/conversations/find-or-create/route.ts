@@ -41,20 +41,16 @@ export async function GET(request: NextRequest) {
       throw new NotFoundError('Utilizatorul');
     }
 
-    // Get or create conversation
+    // Get or create conversation (atomic upsert to prevent race condition)
     const [userId1, userId2] = [user.id, validated.userId].sort();
 
-    let conversation = await prisma.conversation.findUnique({
+    const conversation = await prisma.conversation.upsert({
       where: {
         userId1_userId2: { userId1, userId2 },
       },
+      update: {},
+      create: { userId1, userId2 },
     });
-
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: { userId1, userId2 },
-      });
-    }
 
     return successResponse({ conversationId: conversation.id });
   } catch (error) {

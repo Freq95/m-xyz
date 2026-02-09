@@ -138,8 +138,8 @@ export default function NotificationsPage() {
 
   if (isAuthenticated === null || isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-background border-b border-border">
+      <div className="min-h-screen bg-background pt-16">
+        <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
           <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => router.back()}>
               <ArrowLeft className="w-5 h-5" />
@@ -167,9 +167,9 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-24 pt-16">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background border-b border-border">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
         <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => router.back()}>

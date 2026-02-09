@@ -1,5 +1,6 @@
 import prisma from '@/lib/prisma/client';
 import type { NotificationType } from '@/lib/validations/notification';
+import { isUserBlocked } from './block.service';
 
 interface CreateNotificationParams {
   userId: string;
@@ -47,6 +48,12 @@ export async function notifyPostComment(params: {
     return null;
   }
 
+  // Don't notify if there's a block relationship (either direction)
+  const blocked = await isUserBlocked(postAuthorId, commenterId);
+  if (blocked) {
+    return null;
+  }
+
   // Check user's notification preferences
   const user = await prisma.user.findUnique({
     where: { id: postAuthorId },
@@ -89,6 +96,12 @@ export async function notifyCommentReply(params: {
 
   // Don't notify if replying to own comment
   if (commentAuthorId === replierId) {
+    return null;
+  }
+
+  // Don't notify if there's a block relationship (either direction)
+  const blocked = await isUserBlocked(commentAuthorId, replierId);
+  if (blocked) {
     return null;
   }
 

@@ -257,17 +257,16 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-background pb-8 pt-16">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
+        <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/feed">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4" />
               </Button>
             </Link>
-            <h1 className="text-2xl font-bold">Setări</h1>
+            <h1 className="font-semibold">Setări</h1>
           </div>
           <Button
             onClick={handleSave}
@@ -277,7 +276,9 @@ export default function SettingsPage() {
             Salvează
           </Button>
         </div>
+      </header>
 
+      <div className="max-w-4xl mx-auto p-4">
         <div className="space-y-6">
           {/* Profile Section */}
           <Card className="p-6">
@@ -546,3 +547,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+

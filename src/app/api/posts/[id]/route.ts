@@ -14,7 +14,7 @@ import { validateOrigin } from '@/lib/csrf';
 import { sanitizeText } from '@/lib/sanitize';
 import { invalidateFeedCache } from '@/lib/redis/client';
 import { uploadPostImage, deletePostImage } from '@/lib/supabase/storage';
-import { hasBlockedUser } from '@/lib/services/block.service';
+import { isUserBlocked } from '@/lib/services/block.service';
 import { readRateLimit } from '@/lib/rate-limit';
 
 interface RouteContext {
@@ -69,10 +69,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
       throw new NotFoundError('Postarea');
     }
 
-    // Check if current user has blocked the post author
-    if (userId) {
-      const isBlocked = await hasBlockedUser(userId, post.authorId);
-      if (isBlocked) {
+    // Check if there's a block relationship between current user and post author (either direction)
+    if (userId && userId !== post.authorId) {
+      const blocked = await isUserBlocked(userId, post.authorId);
+      if (blocked) {
         throw new NotFoundError('Postarea');
       }
     }

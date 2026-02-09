@@ -456,8 +456,8 @@ export default function PostDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-background border-b border-border">
+      <div className="min-h-screen bg-background pt-16">
+        <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
           <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
             <Skeleton className="w-8 h-8 rounded-full" />
             <Skeleton className="h-5 w-32" />
@@ -481,8 +481,8 @@ export default function PostDetailPage() {
 
   if (error || !post) {
     return (
-      <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 bg-background border-b border-border">
+      <div className="min-h-screen bg-background pt-16">
+        <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
           <div className="mx-auto max-w-4xl px-4 py-3 flex items-center gap-3">
             <Link href="/feed">
               <Button variant="ghost" size="sm">
@@ -512,9 +512,9 @@ export default function PostDetailPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-24 pt-16">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background border-b border-border">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
         <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/feed">
